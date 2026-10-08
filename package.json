@@ -1,0 +1,27 @@
+{
+  "name": "infra-knowledge-chat",
+  "version": "1.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check": "tsx --env-file=.env scripts/check-setup.ts"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "1.5.12",
+    "@langchain/core": "1.2.17",
+    "@langchain/langgraph": "1.4.21",
+    "deepagents": "1.14.2",
+    "langchain": "1.5.16",
+    "neo4j-driver": "6.2.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  }
+}
