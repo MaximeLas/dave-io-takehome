@@ -1,0 +1,369 @@
+{
+  "generated_by": "eval/tools/truth.ts --write; do not edit by hand",
+  "evals": {
+    "prod-order-queue-dlq": {
+      "count": 4,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-prod-13",
+        "aws:sqs:queue-commerce-prod-14",
+        "aws:sqs:queue-commerce-prod-15",
+        "aws:sqs:queue-commerce-prod-16"
+      ]
+    },
+    "queues-without-dlq": {
+      "count": 16,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-dev-5",
+        "aws:sqs:queue-commerce-dev-6",
+        "aws:sqs:queue-commerce-dev-7",
+        "aws:sqs:queue-commerce-dev-8",
+        "aws:sqs:queue-commerce-prod-10",
+        "aws:sqs:queue-commerce-prod-11",
+        "aws:sqs:queue-commerce-prod-12",
+        "aws:sqs:queue-commerce-prod-13",
+        "aws:sqs:queue-commerce-prod-14",
+        "aws:sqs:queue-commerce-prod-15",
+        "aws:sqs:queue-commerce-prod-16",
+        "aws:sqs:queue-commerce-prod-5",
+        "aws:sqs:queue-commerce-prod-6",
+        "aws:sqs:queue-commerce-prod-7",
+        "aws:sqs:queue-commerce-prod-8",
+        "aws:sqs:queue-commerce-prod-9"
+      ]
+    },
+    "dlq-for-prod-2": {
+      "count": 1,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-prod-14"
+      ]
+    },
+    "dlq-source-reverse": {
+      "count": 1,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-prod-3"
+      ]
+    },
+    "dev-dlq-targets": {
+      "count": 4,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-dev-5",
+        "aws:sqs:queue-commerce-dev-6",
+        "aws:sqs:queue-commerce-dev-7",
+        "aws:sqs:queue-commerce-dev-8"
+      ]
+    },
+    "fulfillment-backing-up": {
+      "count": 10,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-02",
+        "aws:ec2:i-ecomm-prod-06",
+        "aws:ec2:i-ecomm-prod-10",
+        "aws:ec2:i-ecomm-prod-14",
+        "aws:sqs:queue-commerce-prod-5",
+        "aws:sqs:queue-commerce-prod-6",
+        "aws:sqs:queue-commerce-prod-7",
+        "aws:sqs:queue-commerce-prod-8",
+        "datadog:monitor:commerce-5",
+        "datadog:monitor:commerce-6"
+      ]
+    },
+    "unmonitored-prod-queues": {
+      "count": 14,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-prod-1",
+        "aws:sqs:queue-commerce-prod-10",
+        "aws:sqs:queue-commerce-prod-11",
+        "aws:sqs:queue-commerce-prod-12",
+        "aws:sqs:queue-commerce-prod-13",
+        "aws:sqs:queue-commerce-prod-14",
+        "aws:sqs:queue-commerce-prod-15",
+        "aws:sqs:queue-commerce-prod-16",
+        "aws:sqs:queue-commerce-prod-2",
+        "aws:sqs:queue-commerce-prod-3",
+        "aws:sqs:queue-commerce-prod-4",
+        "aws:sqs:queue-commerce-prod-6",
+        "aws:sqs:queue-commerce-prod-7",
+        "aws:sqs:queue-commerce-prod-9"
+      ]
+    },
+    "dev-compute-storage": {
+      "count": 8,
+      "expected_resource_ids": [
+        "aws:rds:rds-commerce-dev-1",
+        "aws:rds:rds-commerce-dev-2",
+        "aws:rds:rds-commerce-dev-3",
+        "aws:rds:rds-commerce-dev-4",
+        "aws:s3:bucket-commerce-dev-1",
+        "aws:s3:bucket-commerce-dev-2",
+        "aws:s3:bucket-commerce-dev-3",
+        "aws:s3:bucket-commerce-dev-4"
+      ]
+    },
+    "path-compute-to-s3": {
+      "count": 6,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-01",
+        "aws:iam-policy:policy-commerce-prod-1",
+        "aws:iam-role:role-commerce-prod-1",
+        "aws:instance-profile:profile-commerce-prod-1",
+        "aws:s3-policy:bucket-commerce-prod-1",
+        "aws:s3:bucket-commerce-prod-1"
+      ]
+    },
+    "who-can-reach-prod-bucket-1": {
+      "count": 2,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-01",
+        "aws:ec2:i-ecomm-prod-09"
+      ]
+    },
+    "who-can-reach-prod-rds-4": {
+      "count": 2,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-04",
+        "aws:ec2:i-ecomm-prod-12"
+      ]
+    },
+    "downstream-of-prod-01": {
+      "count": 3,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-05",
+        "aws:ec2:i-ecomm-prod-09",
+        "aws:ec2:i-ecomm-prod-13"
+      ]
+    },
+    "queues-for-prod-04": {
+      "count": 4,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-prod-13",
+        "aws:sqs:queue-commerce-prod-14",
+        "aws:sqs:queue-commerce-prod-15",
+        "aws:sqs:queue-commerce-prod-16"
+      ]
+    },
+    "prod-checkout-resources": {
+      "count": 16,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-03",
+        "aws:ec2:i-ecomm-prod-07",
+        "aws:ec2:i-ecomm-prod-11",
+        "aws:ec2:i-ecomm-prod-15",
+        "aws:rds:rds-commerce-prod-4",
+        "aws:rds:rds-commerce-prod-5",
+        "aws:rds:rds-commerce-prod-6",
+        "aws:s3:bucket-commerce-prod-4",
+        "aws:s3:bucket-commerce-prod-5",
+        "aws:s3:bucket-commerce-prod-6",
+        "aws:sqs:queue-commerce-prod-1",
+        "aws:sqs:queue-commerce-prod-2",
+        "aws:sqs:queue-commerce-prod-3",
+        "aws:sqs:queue-commerce-prod-4",
+        "datadog:monitor:commerce-3",
+        "datadog:monitor:commerce-4"
+      ]
+    },
+    "catalog-resources": {
+      "count": 14,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-02",
+        "aws:ec2:i-ecomm-prod-06",
+        "aws:ec2:i-ecomm-prod-10",
+        "aws:ec2:i-ecomm-prod-14",
+        "aws:rds:rds-commerce-prod-1",
+        "aws:rds:rds-commerce-prod-2",
+        "aws:rds:rds-commerce-prod-3",
+        "aws:s3:bucket-commerce-prod-1",
+        "aws:s3:bucket-commerce-prod-2",
+        "aws:s3:bucket-commerce-prod-3",
+        "aws:sqs:queue-commerce-prod-10",
+        "aws:sqs:queue-commerce-prod-11",
+        "aws:sqs:queue-commerce-prod-12",
+        "aws:sqs:queue-commerce-prod-9"
+      ]
+    },
+    "fulfillment-resources": {
+      "count": 14,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-dev-04",
+        "aws:ec2:i-ecomm-dev-08",
+        "aws:ec2:i-ecomm-prod-04",
+        "aws:ec2:i-ecomm-prod-08",
+        "aws:ec2:i-ecomm-prod-12",
+        "aws:ec2:i-ecomm-prod-16",
+        "aws:rds:rds-commerce-dev-3",
+        "aws:rds:rds-commerce-dev-4",
+        "aws:rds:rds-commerce-prod-7",
+        "aws:rds:rds-commerce-prod-8",
+        "aws:sqs:queue-commerce-prod-5",
+        "aws:sqs:queue-commerce-prod-6",
+        "aws:sqs:queue-commerce-prod-7",
+        "aws:sqs:queue-commerce-prod-8"
+      ]
+    },
+    "storefront-resources": {
+      "count": 13,
+      "expected_resource_ids": [
+        "aws:alb:alb-commerce-entry-dev",
+        "aws:alb:alb-commerce-entry-prod",
+        "aws:ec2:i-ecomm-dev-01",
+        "aws:ec2:i-ecomm-dev-05",
+        "aws:ec2:i-ecomm-prod-01",
+        "aws:ec2:i-ecomm-prod-05",
+        "aws:ec2:i-ecomm-prod-09",
+        "aws:ec2:i-ecomm-prod-13",
+        "aws:s3:bucket-commerce-prod-1",
+        "aws:s3:bucket-commerce-prod-2",
+        "aws:s3:bucket-commerce-prod-3",
+        "datadog:monitor:commerce-1",
+        "datadog:monitor:commerce-2"
+      ]
+    },
+    "dev-compute-stack": {
+      "count": 11,
+      "expected_resource_ids": [
+        "aws:alb:alb-commerce-entry-dev",
+        "aws:ec2:i-ecomm-dev-01",
+        "aws:ec2:i-ecomm-dev-02",
+        "aws:ec2:i-ecomm-dev-03",
+        "aws:ec2:i-ecomm-dev-04",
+        "aws:ec2:i-ecomm-dev-05",
+        "aws:ec2:i-ecomm-dev-06",
+        "aws:ec2:i-ecomm-dev-07",
+        "aws:ec2:i-ecomm-dev-08",
+        "aws:target-group:tg-commerce-dev-1",
+        "aws:target-group:tg-commerce-dev-2"
+      ]
+    },
+    "workflows-deploy-prod-compute": {
+      "count": 4,
+      "expected_resource_ids": [
+        "github:workflow:repo-commerce-prod-1:deploy-prod",
+        "github:workflow:repo-commerce-prod-2:deploy-prod",
+        "github:workflow:repo-commerce-prod-3:deploy-prod",
+        "github:workflow:repo-commerce-prod-4:deploy-prod"
+      ]
+    },
+    "repo-behind-dev-02": {
+      "count": 1,
+      "expected_resource_ids": [
+        "github:repo:acme-commerce/repo-commerce-dev-2"
+      ]
+    },
+    "monitors-queues-dbs": {
+      "count": 6,
+      "expected_resource_ids": [
+        "datadog:monitor:commerce-4",
+        "datadog:monitor:commerce-5",
+        "datadog:monitor:commerce-6",
+        "datadog:monitor:commerce-8",
+        "datadog:monitor:commerce-dev-3",
+        "datadog:monitor:commerce-dev-4"
+      ]
+    },
+    "deploy-blast-radius": {
+      "count": 4,
+      "expected_resource_ids": [
+        "aws:ec2:i-ecomm-prod-01",
+        "aws:ec2:i-ecomm-prod-05",
+        "aws:ec2:i-ecomm-prod-09",
+        "aws:ec2:i-ecomm-prod-13"
+      ]
+    },
+    "most-shared-resources": {
+      "count": 24,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-dev-1",
+        "aws:sqs:queue-commerce-dev-2",
+        "aws:sqs:queue-commerce-dev-3",
+        "aws:sqs:queue-commerce-dev-4",
+        "aws:sqs:queue-commerce-dev-5",
+        "aws:sqs:queue-commerce-dev-6",
+        "aws:sqs:queue-commerce-dev-7",
+        "aws:sqs:queue-commerce-dev-8",
+        "aws:sqs:queue-commerce-prod-1",
+        "aws:sqs:queue-commerce-prod-10",
+        "aws:sqs:queue-commerce-prod-11",
+        "aws:sqs:queue-commerce-prod-12",
+        "aws:sqs:queue-commerce-prod-13",
+        "aws:sqs:queue-commerce-prod-14",
+        "aws:sqs:queue-commerce-prod-15",
+        "aws:sqs:queue-commerce-prod-16",
+        "aws:sqs:queue-commerce-prod-2",
+        "aws:sqs:queue-commerce-prod-3",
+        "aws:sqs:queue-commerce-prod-4",
+        "aws:sqs:queue-commerce-prod-5",
+        "aws:sqs:queue-commerce-prod-6",
+        "aws:sqs:queue-commerce-prod-7",
+        "aws:sqs:queue-commerce-prod-8",
+        "aws:sqs:queue-commerce-prod-9"
+      ]
+    },
+    "queues-outside-redrive": {
+      "count": 8,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-prod-10",
+        "aws:sqs:queue-commerce-prod-11",
+        "aws:sqs:queue-commerce-prod-12",
+        "aws:sqs:queue-commerce-prod-5",
+        "aws:sqs:queue-commerce-prod-6",
+        "aws:sqs:queue-commerce-prod-7",
+        "aws:sqs:queue-commerce-prod-8",
+        "aws:sqs:queue-commerce-prod-9"
+      ]
+    },
+    "security-groups-most-rules": {
+      "count": 4,
+      "expected_resource_ids": [
+        "aws:sg:sg-commerce-prod-1",
+        "aws:sg:sg-commerce-prod-2",
+        "aws:sg:sg-commerce-prod-3",
+        "aws:sg:sg-commerce-prod-4"
+      ]
+    },
+    "unmonitored-prod-data": {
+      "count": 13,
+      "expected_resource_ids": [
+        "aws:rds:rds-commerce-prod-1",
+        "aws:rds:rds-commerce-prod-2",
+        "aws:rds:rds-commerce-prod-3",
+        "aws:rds:rds-commerce-prod-5",
+        "aws:rds:rds-commerce-prod-6",
+        "aws:rds:rds-commerce-prod-7",
+        "aws:s3:bucket-commerce-prod-1",
+        "aws:s3:bucket-commerce-prod-2",
+        "aws:s3:bucket-commerce-prod-3",
+        "aws:s3:bucket-commerce-prod-4",
+        "aws:s3:bucket-commerce-prod-5",
+        "aws:s3:bucket-commerce-prod-6",
+        "aws:s3:bucket-commerce-prod-8"
+      ]
+    },
+    "dev-reaching-prod-storage": {
+      "count": 0,
+      "expected_resource_ids": []
+    },
+    "workflows-deploying-to-databases": {
+      "count": 0,
+      "expected_resource_ids": []
+    },
+    "order-flow-instances-actual-access": {
+      "count": 8,
+      "expected_resource_ids": [
+        "aws:rds:rds-commerce-prod-3",
+        "aws:rds:rds-commerce-prod-7",
+        "aws:s3:bucket-commerce-prod-3",
+        "aws:s3:bucket-commerce-prod-7",
+        "aws:sqs:queue-commerce-prod-10",
+        "aws:sqs:queue-commerce-prod-11",
+        "aws:sqs:queue-commerce-prod-12",
+        "aws:sqs:queue-commerce-prod-9"
+      ]
+    },
+    "which-dlq-serves-the-purchase-queue": {
+      "count": 1,
+      "expected_resource_ids": [
+        "aws:sqs:queue-commerce-prod-13"
+      ]
+    }
+  }
+}
