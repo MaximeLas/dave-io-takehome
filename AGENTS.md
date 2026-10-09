@@ -17,8 +17,11 @@ One npm package. Each piece of the system gets its own folder, created with its 
 | `web/` | the chat UI |
 | `eval/` | the questions, the expected answers, and the harness that scores the agent |
 | `scripts/` | developer commands run with `tsx` |
+| `runs/` | one JSON record per agent run (question, tool calls, tokens, cost, answer); gitignored |
 
-The eval harness and the server call the same agent entry point in `src/agent/`, so what is scored is exactly what ships.
+Helpers that belong to no piece (`src/env.ts`, reading settings) stay at `src/`.
+
+The eval harness and the server call the same agent entry point, `runAgent` in `src/agent/run.ts`, so what is scored is exactly what ships. It returns the run record that `runs/` stores.
 
 **The assignment files are read-only:** `README.md`, `eval/QUESTIONS.md`, `eval/expected.generated.json`, `mock-infra.cypher`, `docker-compose.yml` and `Dockerfile` stay exactly as received. Our work goes in new files beside them.
 
@@ -26,6 +29,7 @@ The eval harness and the server call the same agent entry point in `src/agent/`,
 
 - Neo4j: `docker compose up -d --build` from the repo root (the README's `cd` step does not apply here). The seed loads 297 nodes and 579 relationships.
 - `npm run check` before anything else: it checks the API key works, the agent library loads, and the graph is fully seeded, without spending model tokens.
+- `npm run ask -- <question-id | question text>` runs the agent on one question (an id from `eval/QUESTIONS.md`, or any text), prints every tool call and the answer with its cost, and saves the record under `runs/`.
 - Settings come from `.env`; `.env.example` lists every variable. A new variable goes into both.
 - The Anthropic key is `APP_ANTHROPIC_API_KEY`, not the SDK's default name, so the agent builds its model explicitly with that key (see `docs/facts.md`).
 
@@ -48,11 +52,22 @@ LangChain's `langchain-skills` pack was reviewed on 2026-10-08 and trails our pi
 - Added machinery (a new tool, a subagent, a second model call) earns its place by a measured gain in correctness, cost or speed.
 - Read the agent's trace (its plan, tool calls and their results) when a question fails; the score says that it failed, the trace says why.
 - The model id lives in one place in `src/agent/`. Changing it, or upgrading a dependency, is its own commit with an eval run, so a score change can be attributed.
+- The system prompt is one string whose hash goes into every run record, so a prompt change is attributable like a code change.
+
+The approach follows Anthropic's [Building effective agents](https://www.anthropic.com/research/building-effective-agents) (the simplest thing that works, one measured addition at a time) and [Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents) (the tool's interface is a design surface of its own).
+
+## Tools
+
+- A tool is one function with a zod input schema and a description written for someone who has never seen the system: what it does, what comes back and how to read it, what a failure looks like. The description is all the model knows about the tool.
+- Output is compact text, and the fact the model must not miss comes first. For the query tool that is the row count, said explicitly for an empty result and for a cut one.
+- A failure is returned as text (`Cypher error: …`), never thrown: the model is the party that can fix the query.
+- Safety is enforced where the model cannot reach it. The query tool runs inside a database read transaction (see `docs/facts.md`), not behind a keyword filter.
+- Tool names must not reuse a deepagents built-in name (`docs/facts.md`).
 
 ## Code
 
 - Run `npm run typecheck` before proposing a commit.
-- Every tool input has a zod schema.
+- A file opens with a comment saying what the module is for and why it is shaped the way it is. Every exported function and type carries a one-line JSDoc saying what it is for. Comments explain intent; none narrate the code.
 - `tsx` runs scripts only; the NestJS server runs from compiled output, because `tsx` drops the decorator metadata Nest's dependency injection needs.
 - Dependencies are pinned exactly (`.npmrc` sets `save-exact`). Secrets live only in `.env`.
 

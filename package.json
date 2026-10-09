@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "check": "tsx --env-file=.env scripts/check-setup.ts"
+    "check": "tsx --env-file=.env scripts/check-setup.ts",
+    "ask": "tsx --env-file=.env scripts/ask.ts"
   },
   "private": true,
   "type": "module",
