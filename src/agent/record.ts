@@ -35,6 +35,8 @@ export interface RunRecord {
   model: string;
   modelSettings: Record<string, unknown>;
   promptVersion: string;
+  /** The git commit the code ran from, "-dirty" when the tree had changes; "unknown" outside git. */
+  codeVersion: string;
   startedAt: string;
   finishedAt: string;
   durationMs: number;
@@ -42,19 +44,25 @@ export interface RunRecord {
   toolCalls: ToolCallRecord[];
   usage: TokenUsage;
   costUsd: number;
+  /** The answer as prose, for the user. */
   answer: string;
+  /** The resource ids the answer asserts, for the eval; empty for "none". */
+  ids: string[];
   /** The whole conversation as the library serialises it, for reading a failed run. */
   messages: unknown[];
 }
 
-// USD per million tokens, from the published price list (checked 2026-10-08). The cache
-// write price is the 5-minute cache, 1.25x input. A model missing here costs NaN on
-// purpose: an unknown price must show, not read as free.
+// USD per million tokens, from the published price list (checked 2026-10-09). The cache
+// write price is the 5-minute cache, 1.25x input; cache reads are the published rate per
+// model. Haiku's prices hold for prompts under 100k tokens, which every call here is.
+// A model missing here costs NaN on purpose: an unknown price must show, not read as free.
 export const PRICES_USD_PER_MILLION_TOKENS: Record<
   string,
   { input: number; output: number; cacheRead: number; cacheWrite: number }
 > = {
   "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
 };
 
 /** The run's cost in USD from the price table; NaN for a model without a price. */

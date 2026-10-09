@@ -29,7 +29,7 @@ The eval harness and the server call the same agent entry point, `runAgent` in `
 
 - Neo4j: `docker compose up -d --build` from the repo root (the README's `cd` step does not apply here). The seed loads 297 nodes and 579 relationships.
 - `npm run check` before anything else: it checks the API key works, the agent library loads, and the graph is fully seeded, without spending model tokens.
-- `npm run ask -- <question-id | question text>` runs the agent on one question (an id from `eval/QUESTIONS.md`, or any text), prints every tool call and the answer with its cost, and saves the record under `runs/`.
+- `npm run ask -- <question-id | question text>` runs the agent on one question (an id from `eval/QUESTIONS.md`, or any text), prints every tool call and the answer with its cost, and saves the record under `runs/`. `--model <id>` and `--effort <level>` override what ships; comparisons between models set the effort explicitly, because the API's default effort differs by model.
 - Settings come from `.env`; `.env.example` lists every variable. A new variable goes into both.
 - The Anthropic key is `APP_ANTHROPIC_API_KEY`, not the SDK's default name, so the agent builds its model explicitly with that key (see `docs/facts.md`).
 
@@ -52,7 +52,8 @@ LangChain's `langchain-skills` pack was reviewed on 2026-10-08 and trails our pi
 - Added machinery (a new tool, a subagent, a second model call) earns its place by a measured gain in correctness, cost or speed.
 - Read the agent's trace (its plan, tool calls and their results) when a question fails; the score says that it failed, the trace says why.
 - The model id lives in one place in `src/agent/`. Changing it, or upgrading a dependency, is its own commit with an eval run, so a score change can be attributed.
-- The system prompt is one string whose hash goes into every run record, so a prompt change is attributable like a code change.
+- The system prompt is one string whose hash goes into every run record, so a prompt change is attributable like a code change. The record also carries the git commit the code ran from (`-dirty` when uncommitted), since the model reads the tools' text too.
+- The answer is structured (`answer` prose for the user, `ids` for the eval), delivered by the model through a `final_answer` tool. One shape serves the chat and the eval, so what is scored is what the user reads; an eval-only answer format would score something that never ships.
 
 The approach follows Anthropic's [Building effective agents](https://www.anthropic.com/research/building-effective-agents) (the simplest thing that works, one measured addition at a time) and [Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents) (the tool's interface is a design surface of its own).
 

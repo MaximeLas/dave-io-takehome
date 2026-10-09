@@ -6,13 +6,15 @@ Format: a heading per fact, then the version, the evidence, and the date it was 
 
 ## deepagents
 
-### Structured output: wrap the schema in `toolStrategy()` or `providerStrategy()`
+### Structured output: `toolStrategy()` with the tool choice left to the model
 
 `createDeepAgent` accepts a `responseFormat`, and the result then carries a typed `structuredResponse`, so the answer shape is enforced by the library instead of requested in the prompt. A bare zod schema does not typecheck (TS2322), although the library's own docstring says it does; wrap it with `toolStrategy(schema)` or `providerStrategy(schema)` from `langchain`.
 
-- Version: deepagents 1.14.2, langchain 1.5.16
-- Evidence: `grep -n "SupportedResponseFormat =" node_modules/deepagents/dist/agent-*.d.ts` lists the accepted types; passing a bare `z.object(...)` as `responseFormat` fails `npm run typecheck`
-- Checked: 2026-10-08
+Neither works as shipped with the current Anthropic models, for opposite reasons. `toolStrategy` binds the schema as a tool and sends `tool_choice: any` on every model call, which Claude Sonnet 5.5, Opus 5.5 and Haiku 5.5 reject (`400 tool_choice: type "tool" and "any" are not supported for this model`). `providerStrategy` sends the schema as the API's `output_config.format`, which constrains every turn to that JSON, and the model, constrained from its first turn, answered `{"answer":"","ids":[]}` without calling a tool. What works: `toolStrategy` plus a middleware whose `wrapModelCall` sets `toolChoice: "auto"` on the request, so the model queries freely and calls the answer tool when done. The structured tool takes its name from the schema's `title` (zod: `.meta({ title })`), `extract-N` otherwise. When the model ends in prose instead, `structuredResponse` is `undefined` and nothing retries; the run record then carries an empty answer, which the eval scores as a failure, and the prompt says the call is required.
+
+- Version: deepagents 1.14.2, langchain 1.5.16, @langchain/anthropic 1.5.12
+- Evidence: `grep -n 'structuredTools.length > 0 ? "any"' node_modules/langchain/dist/agents/nodes/AgentNode.js` (the forced choice, overridden by `preparedOptions.toolChoice`); `grep -n "outputConfig: { format" node_modules/langchain/dist/agents/nodes/AgentNode.js` (the provider path); `grep -n "getFunctionName(asJsonSchema.title)" node_modules/langchain/dist/agents/responses.js` (the tool's name); `npm run ask -- dlq-for-prod-2` ends with a `final_answer` call and non-empty ids
+- Checked: 2026-10-09
 
 ### Pass the model explicitly; the model id also changes the system prompt
 
