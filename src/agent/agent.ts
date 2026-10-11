@@ -14,10 +14,14 @@ import { SYSTEM_PROMPT } from "./prompt.js";
 import { runCypher } from "./tools.js";
 
 /** The models the agent can run on; a model is listed once its price row exists in record.ts. */
-export type ModelId = "claude-sonnet-5-5" | "claude-haiku-5-5" | "claude-opus-5-5";
+export const MODEL_IDS = ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"] as const;
+/** One of MODEL_IDS. */
+export type ModelId = (typeof MODEL_IDS)[number];
 
 /** Anthropic's effort levels. Defaults differ by model, so comparisons always set it. */
-export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+/** One of EFFORTS. */
+export type Effort = (typeof EFFORTS)[number];
 
 /** The model and effort the agent ships with. Changing either is its own commit with an eval run. */
 export const DEFAULT_MODEL: ModelId = "claude-sonnet-5-5";

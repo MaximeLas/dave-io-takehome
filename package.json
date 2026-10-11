@@ -3,13 +3,15 @@
   "version": "1.0.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "check": "tsx --env-file=.env scripts/check-setup.ts",
-    "ask": "tsx --env-file=.env scripts/ask.ts"
+    "test": "tsx --test eval/*.test.ts",
+    "check": "tsx --env-file-if-exists=.env scripts/check-setup.ts",
+    "ask": "tsx --env-file-if-exists=.env scripts/ask.ts",
+    "eval": "tsx --env-file-if-exists=.env scripts/eval.ts"
   },
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.9"
   },
   "dependencies": {
     "@langchain/anthropic": "1.5.12",

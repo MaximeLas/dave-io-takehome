@@ -92,6 +92,16 @@ The filesystem middleware measures every tool result; one longer than 80,000 cha
 - Evidence: `grep -n '"ANTHROPIC_API_KEY"' node_modules/@langchain/anthropic/dist/chat_models.js`
 - Checked: 2026-10-08
 
+## Anthropic API
+
+### The current models take no sampling parameters; effort is the one output knob
+
+`temperature`, `top_p` and `top_k` are refused by Claude Sonnet 5.5 and Haiku 5.5 (`400 invalid_request_error: temperature is deprecated for this model`), as they were from Opus 4.7 on. Thinking is adaptive and on by default, and `output_config.effort` is what sets how much of it the model does. So there is no setting that makes a run deterministic, and none that trades randomness for quality: run-to-run variation is a property of the model, the effort and the prompt, and is measured rather than tuned away. The agent therefore sets `model`, `effort` and `max_tokens` and nothing else, and the eval records those three.
+
+- Version: API `2023-06-01`, models `claude-sonnet-5-5`, `claude-haiku-5-5`
+- Evidence: `set -a; . ./.env; set +a; curl -s https://api.anthropic.com/v1/messages -H "x-api-key: $APP_ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" -d '{"model":"claude-sonnet-5-5","max_tokens":5,"temperature":0,"messages":[{"role":"user","content":"hi"}]}'` returns the 400; the same request without `temperature` and with `"output_config":{"effort":"low"}` answers
+- Checked: 2026-10-10
+
 ## TypeScript and NestJS
 
 ### `tsx` drops decorator metadata, so it runs scripts, not the NestJS server

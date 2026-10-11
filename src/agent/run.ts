@@ -29,6 +29,8 @@ export interface RunInput {
 export interface RunOptions {
   model?: ModelId;
   effort?: Effort;
+  /** Aborts the run (the invoke throws) when it fires; the eval uses it as a per-question deadline. */
+  signal?: AbortSignal;
 }
 
 const agents = new Map<string, ReturnType<typeof createInfraAgent>>();
@@ -48,7 +50,10 @@ export async function runAgent(input: RunInput, options: RunOptions = {}): Promi
   }
 
   const startedAt = new Date();
-  const result = await agent.invoke({ messages: [{ role: "user", content: input.question }] });
+  const result = await agent.invoke(
+    { messages: [{ role: "user", content: input.question }] },
+    options.signal ? { signal: options.signal } : undefined,
+  );
   const finishedAt = new Date();
 
   const messages = result.messages as BaseMessage[];
@@ -130,7 +135,8 @@ function readTrace(messages: BaseMessage[]): {
 // score move can be attributed to a code change (the tool's text is read by the model
 // too, and the prompt hash alone does not cover it). Unknown outside a git checkout.
 let cachedCodeVersion: string | undefined;
-function codeVersion(): string {
+/** The git commit the code runs from, "-dirty" when the tree has changes; also stamped on eval records. */
+export function codeVersion(): string {
   if (cachedCodeVersion === undefined) {
     try {
       const commit = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
