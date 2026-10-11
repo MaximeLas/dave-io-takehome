@@ -10,7 +10,7 @@ import { createMiddleware, toolStrategy } from "langchain";
 import { z } from "zod";
 
 import { requireEnv } from "../env.js";
-import { SYSTEM_PROMPT } from "./prompt.js";
+import { IDS_RULE, SYSTEM_PROMPT } from "./prompt.js";
 import { runCypher } from "./tools.js";
 
 /** The models the agent can run on; a model is listed once its price row exists in record.ts. */
@@ -54,11 +54,7 @@ export const ANSWER_SCHEMA = z
       .describe(
         "The answer for the user, in prose: the finding, then what you did and how you verified it. Name resources by their id property.",
       ),
-    ids: z
-      .array(z.string())
-      .describe(
-        "The id property of every resource the answer asserts: a lookup's target, a set's members, every node on a path. Leave out resources you only mention to rule them out. Empty when the answer is that none exists.",
-      ),
+    ids: z.array(z.string()).describe(IDS_RULE),
   })
   .meta({
     title: FINAL_ANSWER_TOOL,
