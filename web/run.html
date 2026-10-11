@@ -1,0 +1,302 @@
+<!doctype html>
+<!--
+  The run page: one run record (run.html?id=<runId>), read from /api/runs/<runId> and laid
+  out for reading: the question, the answer, then each call to the model with what it said,
+  the queries it asked for and what came back, then the run's totals. Any record in runs/
+  opens here, an eval question's as well as a chat turn's.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run record</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  /* Wider than the chat: query results are tables. */
+  .column { max-width: 60rem; }
+  main { flex: 1; padding: 1.75rem 0 3rem; }
+  h2 { font-size: 0.8rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 2.2rem 0 0.9rem; }
+  .meta { color: var(--muted); font-size: 0.85rem; margin: 0; }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .meta code { font: 0.8rem var(--mono); }
+
+  .legend { color: var(--muted); font-size: 0.85rem; margin: -0.4rem 0 1.1rem; max-width: 40rem; }
+  .calls { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--rule); }
+  .call { position: relative; padding: 0 0 1.6rem 1.4rem; }
+  .call::before {
+    content: ""; position: absolute; left: -0.3rem; top: 0.45rem;
+    width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--paper); border: 1px solid var(--muted);
+  }
+  .call-head { font-size: 0.85rem; color: var(--muted); margin: 0 0 0.5rem; }
+  .call-head strong { color: var(--ink); font-weight: 600; }
+  .said { font-size: 0.95rem; margin: 0 0 0.7rem; }
+  .said p, .said ul, .said ol { margin: 0 0 0.5rem; }
+  .said ul, .said ol { padding-left: 1.2rem; }
+  .said code { font: 0.9em var(--mono); }
+  .tool { margin: 0 0 0.9rem; }
+  .result { margin: 0.35rem 0 0; font: 0.78rem/1.5 var(--mono); color: var(--muted); }
+  .result.error { color: var(--warn); }
+  .result strong { color: var(--ink); font-weight: 600; }
+  .result .warning { color: var(--warn); }
+  .result.error strong { color: var(--warn); }
+  .result details { margin-top: 0.3rem; }
+  .result summary { cursor: pointer; }
+  /* A result reads apart from the query that produced it: no fill, a rule on the left. */
+  .result pre.output { margin-top: 0.3rem; color: var(--ink); background: none; border-left: 2px solid var(--rule); border-radius: 0; padding: 0.15rem 0 0.15rem 0.75rem; }
+  .table-wrap { margin-top: 0.4rem; overflow-x: auto; border: 1px solid var(--rule); border-radius: 5px; }
+  /* Like a database client: every row is one line, long text (a description) is cut with an
+     ellipsis and opens in place on click, and a table wider than the page scrolls sideways. */
+  table.rows { border-collapse: collapse; font: 0.75rem/1.45 var(--mono); color: var(--ink); min-width: 100%; }
+  table.rows th { text-align: left; font-weight: 600; color: var(--muted); background: var(--code-bg); }
+  table.rows th, table.rows td { padding: 0.3rem 0.6rem; vertical-align: top; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  table.rows td.long { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+  table.rows td.long.open { white-space: normal; min-width: 22rem; max-width: 32rem; }
+  table.rows tr:last-child td { border-bottom: none; }
+  table.rows td.null { color: var(--muted); }
+  .delivered { font-size: 0.85rem; color: var(--muted); margin: 0; }
+
+  .totals { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.5rem; margin: 0; font-size: 0.9rem; }
+  .totals dt { color: var(--muted); }
+  .totals dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .totals code { font: 0.8rem var(--mono); }
+</style>
+</head>
+<body>
+  <header>
+    <div class="column">
+      <div>
+        <h1><a href="/">Infrastructure chat</a></h1>
+        <p>Run record: everything the agent did for one question.</p>
+      </div>
+      <a class="quiet" id="raw" hidden>Raw JSON</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="column" id="run"><p class="meta">Loading the run record…</p></div>
+  </main>
+
+<script type="module">
+  import { count, dateTime, el, idTags, money, renderMarkdown, seconds } from "./common.js";
+
+  // A tool result longer than this many lines is folded behind its first line.
+  const FOLD_LINES = 12;
+  // A table cell longer than this many characters is prose (a description): cut, opened on click.
+  const LONG_CELL = 48;
+  // What a call's stop reason means, for the reasons other than asking for queries or answering.
+  const STOP_REASONS = {
+    tool_use: "asked for tools",
+    end_turn: "ended its turn",
+    max_tokens: "hit the output limit",
+    refusal: "refused",
+    pause_turn: "paused",
+  };
+
+  const root = document.getElementById("run");
+  const runId = new URLSearchParams(location.search).get("id");
+
+  function meta(...parts) {
+    const p = el("p", "meta");
+    parts.forEach((part, i) => {
+      if (i > 0) p.append(" · ");
+      p.append(part);
+    });
+    return p;
+  }
+  function bold(text) {
+    return el("b", "", text);
+  }
+  function code(text) {
+    return el("code", "", text);
+  }
+
+  // The record's messages are LangChain's serialised form: { type: "human" | "ai" | "tool",
+  // data: { content, tool_calls, usage_metadata, response_metadata, tool_call_id, status } },
+  // where an AI message's content is a string or a list of blocks (text, thinking, tool_use).
+  function blocks(content) {
+    return typeof content === "string" ? [{ type: "text", text: content }] : Array.isArray(content) ? content : [];
+  }
+
+  // The query tool's rows as a table. Its output is a count line, then `columns: a | b`, then
+  // one line per row with the cells joined by " | " (src/agent/tools.ts). A value that itself
+  // contains " | " would shift its row, so any row that does not split into exactly one cell
+  // per column leaves the whole result as text.
+  function rowsTable(lines) {
+    if (!lines[0]?.startsWith("columns: ")) return null;
+    const columns = lines[0].slice("columns: ".length).split(" | ");
+    const rows = lines.slice(1).map((line) => line.split(" | "));
+    if (rows.some((row) => row.length !== columns.length)) return null;
+    const table = el("table", "rows");
+    const head = el("tr");
+    for (const column of columns) head.append(el("th", "", column));
+    table.append(el("thead"));
+    table.tHead.append(head);
+    const body = el("tbody");
+    for (const row of rows) {
+      const tr = el("tr");
+      for (const cell of row) tr.append(el("td", cell === "null" ? "null" : cell.length > LONG_CELL ? "long" : "", cell));
+      body.append(tr);
+    }
+    table.append(body);
+    table.addEventListener("click", (event) => event.target.closest("td.long")?.classList.toggle("open"));
+    const wrap = el("div", "table-wrap");
+    wrap.append(table);
+    return { node: wrap, size: rows.length };
+  }
+
+  // A tool's output: the first line (the row count, or the error) in full, then any database
+  // warnings (a label or property that does not exist), then the rows, folded when long.
+  function toolResult(output, isError) {
+    const result = el("div", isError ? "result error" : "result");
+    const [first, ...rest] = output.split("\n");
+    result.append(el("strong", "", first));
+    while (rest[0]?.startsWith("warning: ")) result.append(el("div", "warning", rest.shift()));
+    if (rest.length === 0) return result;
+    const table = isError ? null : rowsTable(rest);
+    const body = table?.node ?? el("pre", "output", rest.join("\n"));
+    if ((table?.size ?? rest.length) <= FOLD_LINES) {
+      result.append(body);
+    } else {
+      const details = el("details");
+      details.append(el("summary", "", "Show the full result"), body);
+      result.append(details);
+    }
+    return result;
+  }
+
+  // `recorded` is the record's toolCalls still to show, consumed in order (see render).
+  function modelCall(message, n, recorded) {
+    const { content, tool_calls: toolCalls = [], usage_metadata: usage, response_metadata: response } = message.data;
+    const li = el("li", "call");
+    const parts = blocks(content);
+
+    const head = el("p", "call-head");
+    head.append(el("strong", "", `Step ${n}`));
+    const stop = response.stop_reason;
+    const answered = toolCalls.some((call) => call.name === "final_answer");
+    const asked = toolCalls.filter((call) => call.name !== "final_answer").length;
+    const outcome = answered ? "delivered the answer"
+      : stop === "tool_use" ? `asked for ${count(asked, "query", "queries")}`
+      : STOP_REASONS[stop] ?? `stopped (${stop})`;
+    head.append(`: the model ${outcome}`);
+    if (parts.some((part) => part.type === "thinking")) head.append(", after thinking");
+    if (usage) {
+      head.append(` · ${usage.input_tokens.toLocaleString("en")} tokens in, ${usage.output_tokens.toLocaleString("en")} out`);
+    }
+    li.append(head);
+
+    for (const part of parts) {
+      if (part.type === "text" && part.text.trim()) {
+        const said = el("div", "said");
+        said.innerHTML = renderMarkdown(part.text);
+        li.append(said);
+      } else if (part.type === "thinking" && part.thinking?.trim()) {
+        const details = el("details", "said");
+        details.append(el("summary", "", "Thinking"), el("p", "", part.thinking));
+        li.append(details);
+      }
+    }
+
+    for (const call of toolCalls) {
+      if (call.name === "final_answer") {
+        li.append(el("p", "delivered", `Delivered the answer above, with ${count(call.args.ids?.length ?? 0, "id")}.`));
+        continue;
+      }
+      const tool = el("div", "tool");
+      tool.append(el("pre", "query", call.name === "run_cypher" ? call.args.query : `${call.name} ${JSON.stringify(call.args, null, 2)}`));
+      const result = recorded.shift();
+      tool.append(result?.output ? toolResult(result.output, result.isError) : el("div", "result error", "No result: the turn ended before this tool answered."));
+      li.append(tool);
+    }
+    return li;
+  }
+
+  function render(record) {
+    document.title = `Run: ${record.question.slice(0, 60)}`;
+    const raw = document.getElementById("raw");
+    raw.href = `/api/runs/${encodeURIComponent(record.runId)}`;
+    raw.hidden = false;
+    // Records written before conversations existed have no threadId, and older ones a
+    // different shape still; the page reads the current format only.
+    if (record.threadId === undefined) {
+      root.replaceChildren(el("p", "notice", "This record predates the current format, which the page reads. Raw JSON shows it in full."));
+      return;
+    }
+
+    const page = [];
+    page.push(el("p", "question", record.question));
+    page.push(meta(
+      dateTime(record.startedAt),
+      `${record.model}, effort ${record.modelSettings.effort}`,
+      seconds(record.durationMs),
+      money(record.costUsd),
+    ));
+    const originLine = el("p", "meta");
+    originLine.append(...(record.questionId ? ["Eval question ", code(record.questionId)] : ["Conversation ", code(record.threadId.slice(0, 8))]));
+    page.push(originLine);
+
+    page.push(el("h2", "", "Answer"));
+    const answer = el("div", "answer");
+    if (record.answer) {
+      answer.innerHTML = renderMarkdown(record.answer);
+    } else {
+      answer.append(el("p", "notice", "No structured answer: the model ended without calling final_answer, so the eval scores this run as no answer. Its last words, if any, are in the last call below."));
+    }
+    page.push(answer);
+    if (record.ids.length > 0) page.push(idTags(record.ids));
+
+    // A model call is an AI message with a stop reason, the rule the record's own count uses;
+    // the library adds AI messages of its own, without one, which are not calls. The record's
+    // toolCalls list every call but final_answer in this same order, with the output and the
+    // error flag the chat's trace shows, so the page reads them rather than judging errors again.
+    const recorded = [...record.toolCalls];
+    page.push(el("h2", "", "How the answer was found"));
+    page.push(el("p", "legend", "Each step is one call to the model. It reads the question and everything so far, including the results of the previous step's queries, then either asks for more queries, which run before the next step, or delivers the answer."));
+    const calls = el("ol", "calls");
+    let n = 0;
+    for (const message of record.messages) {
+      if (message.type === "ai" && message.data.response_metadata?.stop_reason !== undefined) {
+        calls.append(modelCall(message, ++n, recorded));
+      }
+    }
+    page.push(calls);
+
+    page.push(el("h2", "", "Totals"));
+    const totals = el("dl", "totals");
+    const row = (label, ...value) => {
+      const dd = el("dd");
+      dd.append(...value);
+      totals.append(el("dt", "", label), dd);
+    };
+    const u = record.usage;
+    row("Started", dateTime(record.startedAt));
+    row("Duration", seconds(record.durationMs));
+    row("Calls to the model", String(record.modelCalls));
+    row("Queries", String(record.toolCalls.length));
+    row("Tokens in", `${u.inputTokens.toLocaleString("en")} (${u.cacheReadTokens.toLocaleString("en")} read from cache, ${u.cacheCreationTokens.toLocaleString("en")} written to it)`);
+    row("Tokens out", u.outputTokens.toLocaleString("en"));
+    row("Cost", money(record.costUsd));
+    row("Prompt version", code(record.promptVersion));
+    row("Code version", code(record.codeVersion));
+    row("Run id", code(record.runId));
+    page.push(totals);
+
+    root.replaceChildren(...page);
+  }
+
+  async function load() {
+    if (!runId) throw new Error("No run named: open this page from a turn's “Full run record” link.");
+    const response = await fetch(`/api/runs/${encodeURIComponent(runId)}`).catch(() => {
+      throw new Error("The server could not be reached. Check that it is running.");
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.message || `The server answered ${response.status}.`);
+    }
+    render(await response.json());
+  }
+
+  load().catch((error) => root.replaceChildren(el("p", "notice", error.message)));
+</script>
+</body>
+</html>

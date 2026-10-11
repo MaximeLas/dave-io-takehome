@@ -31,7 +31,8 @@ The eval harness and the server call the same agent entry point, `runAgent` in `
 - `npm run check` before anything else: it checks the API key works, the agent library loads, and the graph is fully seeded, without spending model tokens.
 - `npm run ask -- <question-id | question text>` runs the agent on one question (an id from `eval/QUESTIONS.md`, or any text), prints every tool call and the answer with its cost, and saves the record under `runs/`. `--model <id>` and `--effort <level>` override what ships; comparisons between models set the effort explicitly, because the API's default effort differs by model.
 - `npm run eval` checks the graph is seeded, runs the thirty questions through the agent as it ships, scores each against the key, prints one row per question with its diagnostics, saves the eval record under `runs/eval/`, and compares the pass count with the committed baseline for that model and effort (`eval/baselines/`). Exit code: 0 when the baseline holds, 1 on a regression, 2 when the run cannot vouch for the agent (a question threw or timed out, or the configuration has no baseline yet), 3 on a usage error; only 0 ships. `--model` and `--effort` compare another configuration against its own baseline; `--only <ids>` runs a subset, reported and not compared; `--accept --tolerance <n>` declares the run the new baseline (the tolerance carries over when omitted on a later accept).
-- `npm test` runs the grader's tests without a model or a database: the key scored against itself passes every question, an empty answer fails every question, and the gate's three verdicts. Run it before trusting any score.
+- `npm run serve` compiles the server and starts it at http://localhost:3000, on localhost only (`HOST` and `PORT` override): the chat page, `POST /api/chat` (one turn; shapes and rules in `src/server/chat.service.ts`), and `GET /api/runs/<runId>`, which `run.html?id=<runId>` lays out for reading, an eval question's record too. A caller sends back a reply's `threadId` to continue the conversation; a conversation keeps the model it started with and lives in the server's memory. Every turn saves its run record under `runs/`.
+- `npm test` runs the tests without a model or a database: the key scored against itself passes every question, an empty answer fails every question, the gate's three verdicts, a chat turn's record counting only its own messages, and the chat endpoint's validation and JSON-only body. Run it before trusting any score.
 - Settings come from `.env`; `.env.example` lists every variable. A new variable goes into both.
 - The Anthropic key is `APP_ANTHROPIC_API_KEY`, not the SDK's default name, so the agent builds its model explicitly with that key (see `docs/facts.md`).
 
@@ -79,7 +80,7 @@ The approach follows Anthropic's [Building effective agents](https://www.anthrop
 
 - Run `npm run typecheck` before proposing a commit.
 - A file opens with a comment saying what the module is for and why it is shaped the way it is. Every exported function and type carries a one-line JSDoc saying what it is for. Comments explain intent; none narrate the code.
-- `tsx` runs scripts only; the NestJS server runs from compiled output, because `tsx` drops the decorator metadata Nest's dependency injection needs.
+- `tsx` runs scripts and tests; the NestJS server runs from compiled output, because `tsx` drops the decorator metadata Nest's dependency injection needs.
 - Dependencies are pinned exactly (`.npmrc` sets `save-exact`). Secrets live only in `.env`.
 
 ## Commits

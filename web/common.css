@@ -1,0 +1,72 @@
+/* What the chat page and the run page share: colours, type, the header, and how an answer,
+   its resource ids and a query look. Each page keeps only its own layout. */
+:root {
+  --paper: #f5f6f3;
+  --ink: #1b2330;
+  --muted: #5e6876;
+  --rule: #dce0da;
+  --accent: #1e6b57;
+  --tag: #e6ebe4;
+  --code-bg: #eceee9;
+  --warn: #9a4a12;
+  --serif: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #14181d;
+    --ink: #e4e7ea;
+    --muted: #9aa3ad;
+    --rule: #2a3038;
+    --accent: #6fc2a6;
+    --tag: #1f2723;
+    --code-bg: #1b2026;
+    --warn: #e59a62;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.5 var(--sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.column { width: 100%; max-width: 46rem; margin: 0 auto; padding: 0 1.25rem; }
+button, select { font: inherit; cursor: pointer; }
+a { color: var(--accent); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { border-bottom: 1px solid var(--rule); }
+header .column { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 1rem; padding-top: 1.1rem; padding-bottom: 1rem; }
+header h1 { font-size: 1rem; font-weight: 650; margin: 0; }
+header h1 a { color: inherit; text-decoration: none; }
+header p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.875rem; }
+.quiet {
+  background: none; border: 1px solid var(--rule); color: var(--ink);
+  border-radius: 6px; padding: 0.3rem 0.7rem; font-size: 0.85rem; white-space: nowrap;
+}
+.quiet:hover { border-color: var(--muted); }
+
+.question {
+  font-weight: 600; font-size: 1rem; margin: 0 0 0.9rem; white-space: pre-wrap;
+  padding-left: 0.85rem; border-left: 3px solid var(--accent);
+}
+.answer { font: 1.0625rem/1.65 var(--serif); max-width: 40rem; overflow-wrap: break-word; }
+.answer p, .answer ul, .answer ol { margin: 0 0 0.75rem; }
+.answer ul, .answer ol { padding-left: 1.2rem; }
+.answer li { margin-bottom: 0.25rem; }
+.answer code { font: 0.9em var(--mono); }
+.notice { color: var(--warn); margin: 0 0 0.75rem; }
+
+.ids { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.9rem 0 0; padding: 0; }
+.ids li { font: 0.78rem/1.2 var(--mono); background: var(--tag); border-radius: 4px; padding: 0.28rem 0.5rem; }
+.ids .kind { color: var(--muted); }
+
+pre.query, pre.output {
+  margin: 0; padding: 0.6rem 0.75rem; background: var(--code-bg); border-radius: 5px;
+  font: 0.8rem/1.5 var(--mono); white-space: pre-wrap; word-break: break-word;
+}

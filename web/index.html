@@ -1,0 +1,312 @@
+<!doctype html>
+<!--
+  The chat page: plain HTML and JavaScript served by the Nest app, no build step.
+  Each turn posts { message, threadId?, model? } to /api/chat and shows the answer, the
+  resource ids it asserts, and a folded trace of the queries behind it, with a link to the
+  turn's full run record (run.html).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infrastructure chat</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  header .totals { font-size: 0.8rem; }
+  header .totals b { color: var(--ink); font-weight: 600; }
+  .controls { display: flex; align-items: center; gap: 0.6rem; }
+  .controls label { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 0.35rem; }
+  .controls select { font-size: 0.85rem; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 0.25rem 0.4rem; }
+  .controls select:disabled { cursor: default; color: var(--muted); }
+
+  main { flex: 1; padding: 1.5rem 0 2rem; }
+  .empty { padding: 1.4rem 0; color: var(--muted); }
+  .empty p { margin: 0 0 0.8rem; }
+  .examples { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+
+  .turn { padding: 1.4rem 0 1.6rem; }
+  .turn + .turn { border-top: 1px solid var(--rule); }
+  .turn-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+  .turn-head time { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  details.trace { margin-top: 1rem; }
+  details.trace summary {
+    cursor: pointer; color: var(--muted); font-size: 0.85rem; list-style: none; display: inline-flex; gap: 0.4rem; align-items: baseline;
+  }
+  details.trace summary::-webkit-details-marker { display: none; }
+  details.trace summary::before { content: "▸"; display: inline-block; transition: transform 120ms ease; }
+  details.trace[open] summary::before { transform: rotate(90deg); }
+  details.trace summary strong { color: var(--ink); font-weight: 600; }
+  details.trace summary:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+  .steps { list-style: none; counter-reset: step; margin: 0.8rem 0 0; padding: 0; border-left: 1px solid var(--rule); }
+  .steps li { counter-increment: step; position: relative; padding: 0 0 0.9rem 1.4rem; }
+  .steps li::before {
+    content: counter(step); position: absolute; left: -0.6rem; top: 0.15rem;
+    width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--paper); border: 1px solid var(--rule);
+    font: 0.7rem/1.1rem var(--mono); text-align: center; color: var(--muted);
+  }
+  .steps .result { margin-top: 0.3rem; font: 0.78rem var(--mono); color: var(--muted); }
+  .steps .result.error { color: var(--warn); }
+  .no-steps { margin: 0.6rem 0 0.6rem 1.4rem; font-size: 0.85rem; color: var(--muted); }
+  .run-facts { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; margin: 0.2rem 0 0 1.4rem; font-size: 0.8rem; color: var(--muted); }
+  .run-facts b { color: var(--ink); font-weight: 600; }
+
+  .waiting { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); font-size: 0.9rem; }
+  .pulse { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } details.trace summary::before { transition: none; } }
+
+  footer { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--rule); }
+  footer form { display: flex; gap: 0.6rem; align-items: flex-end; padding-top: 0.9rem; padding-bottom: 0.5rem; }
+  textarea {
+    flex: 1; resize: none; font: inherit; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 8px; padding: 0.6rem 0.75rem; min-height: 2.6rem; max-height: 10rem;
+  }
+  textarea:focus { border-color: var(--accent); outline: none; }
+  .ask { background: var(--accent); color: var(--paper); border: none; border-radius: 8px; padding: 0.6rem 1.1rem; font-weight: 600; }
+  .ask:disabled { opacity: 0.45; cursor: default; }
+  .hint { color: var(--muted); font-size: 0.75rem; margin: 0 0 0.7rem; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="column">
+      <div>
+        <h1>Infrastructure chat</h1>
+        <p>Answers come from the infrastructure graph, with the queries behind each one.</p>
+        <p class="totals" id="totals" hidden></p>
+      </div>
+      <div class="controls">
+        <!-- The server's CHAT_MODELS in order, the shipped default first; a test holds them together. -->
+        <label title="A conversation keeps its model. Start a new conversation to change it.">Model
+          <select id="model">
+            <option value="claude-sonnet-5-5">Sonnet 5.5</option>
+            <option value="claude-haiku-5-5">Haiku 5.5, cheaper</option>
+          </select>
+        </label>
+        <button class="quiet" type="button" id="new">New conversation</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="column" id="conversation" aria-live="polite"></div>
+  </main>
+
+  <footer>
+    <form class="column" id="composer">
+      <textarea id="message" rows="1" placeholder="Ask about the infrastructure" aria-label="Your question" required></textarea>
+      <button class="ask" type="submit" id="ask">Ask</button>
+    </form>
+    <div class="column"><p class="hint">Enter sends, Shift+Enter for a new line. An answer takes 10 to 60 seconds.</p></div>
+  </footer>
+
+  <template id="empty">
+    <div class="empty">
+      <p>Ask about the servers, databases, queues, permissions and monitors in the graph. Follow-up questions keep the context of the conversation. For example:</p>
+      <div class="examples">
+        <button class="quiet" type="button">Which load balancers face the internet, and where do they send traffic?</button>
+        <button class="quiet" type="button">What runs inside the production VPC?</button>
+        <button class="quiet" type="button">Which security groups accept traffic from anywhere?</button>
+      </div>
+    </div>
+  </template>
+
+<script type="module">
+  import { clockTime, count, dateTime, el, idTags, money, renderMarkdown, seconds } from "./common.js";
+
+  const conversation = document.getElementById("conversation");
+  const form = document.getElementById("composer");
+  const input = document.getElementById("message");
+  const askButton = document.getElementById("ask");
+  const modelSelect = document.getElementById("model");
+  const totalsLine = document.getElementById("totals");
+
+  // The server returns the thread id with the first answer; sending it back continues the
+  // conversation. It lives only in this page: a reload starts a new conversation. The model
+  // is chosen before the first question and kept for the conversation, as the server requires.
+  let threadId = null;
+  let busy = false;
+  // The conversation's running totals. Each run record covers one turn, so they add up.
+  let totals = { answers: 0, ms: 0, usd: 0 };
+
+  function showTotals() {
+    totalsLine.hidden = totals.answers === 0;
+    totalsLine.replaceChildren(
+      "This conversation: ",
+      el("b", "", count(totals.answers, "answer")), ", ",
+      el("b", "", seconds(totals.ms)), ", ",
+      el("b", "", money(totals.usd)),
+    );
+  }
+
+  function startOver() {
+    threadId = null;
+    totals = { answers: 0, ms: 0, usd: 0 };
+    showTotals();
+    modelSelect.disabled = busy;
+  }
+
+  function showEmpty() {
+    conversation.replaceChildren(document.getElementById("empty").content.cloneNode(true));
+    for (const button of conversation.querySelectorAll(".examples button")) {
+      button.addEventListener("click", () => ask(button.textContent));
+    }
+  }
+
+  function traceDetails(trace, isFollowUp) {
+    const details = el("details", "trace");
+    const summary = el("summary");
+    summary.append(el("strong", "", "How I got there"), ` ${count(trace.steps.length, "query", "queries")}, ${seconds(trace.durationMs)}, ${money(trace.costUsd)}`);
+    details.append(summary);
+
+    if (trace.steps.length === 0) {
+      details.append(el("p", "no-steps", isFollowUp
+        ? "No new queries: the answer builds on earlier in the conversation."
+        : "No queries were run for this answer."));
+    } else {
+      const steps = el("ol", "steps");
+      for (const step of trace.steps) {
+        const li = el("li");
+        li.append(el("pre", "query", step.tool === "run_cypher" ? step.input : `${step.tool} ${step.input}`));
+        li.append(el("div", step.isError ? "result error" : "result", step.result));
+        steps.append(li);
+      }
+      details.append(steps);
+    }
+
+    const facts = el("div", "run-facts");
+    const fact = (label, value) => {
+      const span = el("span");
+      if (label) span.append(`${label} `);
+      span.append(el("b", "", value));
+      facts.append(span);
+    };
+    fact("model", trace.model);
+    fact("effort", trace.effort);
+    facts.append(el("span", "", count(trace.modelCalls, "call to the model", "calls to the model")));
+    const link = el("a", "", "Full run record");
+    link.href = `run.html?id=${encodeURIComponent(trace.runId)}`;
+    link.target = "_blank";
+    link.rel = "noopener";
+    facts.append(link);
+    details.append(facts);
+    return details;
+  }
+
+  function setBusy(value) {
+    busy = value;
+    input.disabled = value;
+    askButton.disabled = value;
+    modelSelect.disabled = value || threadId !== null;
+    if (!value) input.focus();
+  }
+
+  function stamp(time, iso) {
+    time.dateTime = iso;
+    time.textContent = clockTime(iso);
+    time.title = dateTime(iso);
+  }
+
+  async function ask(text) {
+    const message = text.trim();
+    if (!message || busy) return;
+    conversation.querySelector(".empty")?.remove();
+
+    const turn = el("section", "turn");
+    const head = el("div", "turn-head");
+    const time = el("time");
+    stamp(time, new Date().toISOString());
+    head.append(el("p", "question", message), time);
+    turn.append(head);
+    const waiting = el("div", "waiting");
+    waiting.setAttribute("role", "status");
+    const label = el("span", "", "Working on it");
+    waiting.append(el("span", "pulse"), label);
+    turn.append(waiting);
+    conversation.append(turn);
+    turn.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    input.value = "";
+    resize();
+    setBusy(true);
+    const started = Date.now();
+    const timer = setInterval(() => {
+      label.textContent = `Working on it: reading the graph and checking, ${Math.round((Date.now() - started) / 1000)} s`;
+    }, 1000);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(threadId ? { message, threadId } : { message, model: modelSelect.value }),
+      }).catch(() => {
+        throw new Error("The server could not be reached. Check that it is running.");
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        // 404: the server restarted and forgot the conversation; the next question starts a new one.
+        if (response.status === 404) {
+          startOver();
+          throw new Error("The server restarted and forgot this conversation. Your next question starts a new one.");
+        }
+        const reason = Array.isArray(body.message) ? body.message.join(" ") : body.message;
+        throw new Error(reason || `The server answered ${response.status}.`);
+      }
+      const isFollowUp = threadId !== null;
+      threadId = body.threadId;
+      stamp(time, body.trace.startedAt);
+      const answer = el("div", "answer");
+      if (body.answer) {
+        answer.innerHTML = renderMarkdown(body.answer);
+      } else if (body.unstructuredReply) {
+        // The model replied in prose without its structured answer: shown, but no resources
+        // are tagged, and the eval would score this turn as no answer.
+        answer.append(el("p", "notice", "This reply came without the structured answer, so its resources are not tagged."));
+        answer.insertAdjacentHTML("beforeend", renderMarkdown(body.unstructuredReply));
+      } else {
+        answer.append(el("p", "notice", "The agent stopped without giving an answer. Ask again, or rephrase the question."));
+      }
+      waiting.replaceWith(answer);
+      if (body.ids.length > 0) answer.after(idTags(body.ids));
+      turn.append(traceDetails(body.trace, isFollowUp));
+      totals.answers += 1;
+      totals.ms += body.trace.durationMs;
+      totals.usd += body.trace.costUsd;
+      showTotals();
+    } catch (error) {
+      waiting.replaceWith(el("p", "notice", `No answer: ${error.message}`));
+    } finally {
+      clearInterval(timer);
+      setBusy(false);
+    }
+  }
+
+  function resize() {
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight + 2}px`;
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    ask(input.value);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      ask(input.value);
+    }
+  });
+  input.addEventListener("input", resize);
+  document.getElementById("new").addEventListener("click", () => {
+    if (busy) return;
+    startOver();
+    showEmpty();
+    input.focus();
+  });
+
+  showEmpty();
+  input.focus();
+</script>
+</body>
+</html>

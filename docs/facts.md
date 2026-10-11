@@ -112,13 +112,14 @@ The filesystem middleware measures every tool result; one longer than 80,000 cha
 
 ## TypeScript and NestJS
 
-### `tsx` drops decorator metadata, so it runs scripts, not the NestJS server
+### `tsx` drops decorator metadata, so the NestJS server runs compiled
 
-`tsx` compiles with esbuild, which ignores `emitDecoratorMetadata`. NestJS's dependency injection reads that metadata, so a Nest app started with `tsx` gets undefined injections. Scripts run with `tsx`; the server runs from `tsc` output or the Nest CLI.
+`tsx` compiles with esbuild, which ignores `emitDecoratorMetadata`. NestJS's dependency injection reads that metadata, so a Nest app started with `tsx` gets undefined injections. Scripts and tests run with `tsx`; the server runs from `tsc` output or the Nest CLI. A dependency given an explicit token, `constructor(@Inject(ChatService) chat: ChatService)`, needs no type metadata, which is how the endpoint test builds the controller under `tsx`.
 
-- Version: tsx 4.23.15, typescript 6.0.3
-- Evidence: `echo 'const d = (t: any) => t; class A {} @d class B { constructor(a: A) {} }' | node_modules/.bin/esbuild --loader=ts --tsconfig-raw='{"compilerOptions":{"experimentalDecorators":true,"emitDecoratorMetadata":true}}' | grep -c __metadata` prints 0; the same source through `npx tsc --ignoreConfig --experimentalDecorators --emitDecoratorMetadata` emits `__metadata` calls
-- Checked: 2026-10-08
+- Version: tsx 4.23.15, typescript 6.0.3, @nestjs/testing 12.1.2
+- Evidence (metadata): `echo 'const d = (t: any) => t; class A {} @d class B { constructor(a: A) {} }' | node_modules/.bin/esbuild --loader=ts --tsconfig-raw='{"compilerOptions":{"experimentalDecorators":true,"emitDecoratorMetadata":true}}' | grep -c __metadata` prints 0; the same source through `npx tsc --ignoreConfig --experimentalDecorators --emitDecoratorMetadata` emits `__metadata` calls
+- Evidence (`@Inject`): `npm test` passes `src/server/chat.controller.test.ts`, which builds the controller under `tsx`; with the `@Inject(ChatService)` removed, its valid requests answer 500
+- Checked: 2026-10-11
 
 ### TypeScript 6, following NestJS's own pin
 
@@ -127,6 +128,14 @@ npm tags TypeScript 7 as `latest`, but NestJS's official starter pins `typescrip
 - Version: typescript 6.0.3
 - Evidence: `curl -s https://raw.githubusercontent.com/nestjs/typescript-starter/master/package.json | grep '"typescript"'`
 - Checked: 2026-10-08
+
+### NestJS 12 ships as ES modules
+
+From version 12 the Nest packages are ESM (`"type": "module"`), like this package, so the server imports them directly and compiles with the same `NodeNext` settings as the rest of the code. Nest imports `reflect-metadata` itself; the package is still a dependency because Nest declares it as a peer.
+
+- Version: @nestjs/common, @nestjs/core, @nestjs/platform-express 12.1.2
+- Evidence: `node -p "require('./node_modules/@nestjs/core/package.json').type"` prints `module`; `grep -n "reflect-metadata" node_modules/@nestjs/core/index.js`
+- Checked: 2026-10-11
 
 ### TypeScript 6 needs `"types": ["node"]` in `tsconfig.json`
 
