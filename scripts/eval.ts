@@ -6,8 +6,8 @@
 //   npm run eval -- --accept --tolerance 1         (declare this run the baseline for its model and effort)
 //
 // Exit code, read by CI: 0 when the run holds its baseline, 1 on a regression, 2 when the
-// run cannot vouch for the agent (a question threw, or the model and effort have no baseline
-// yet), 3 on a usage error. Only 0 ships.
+// run cannot vouch for the agent (the eval stopped before scoring, a question threw, or the
+// model and effort have no baseline yet), 3 on a usage error. Only 0 ships.
 import { parseArgs } from "node:util";
 
 import { baselineFrom, compare, EXIT, exitCode, loadBaseline, saveBaseline } from "../eval/baseline.js";
@@ -83,6 +83,11 @@ try {
   const baseline = run.full ? await loadBaseline(run.model, run.effort) : null;
   baselineTolerance = baseline?.tolerance;
   record = { ...run, comparison: baseline ? compare(run, baseline) : null };
+} catch (error) {
+  // Nothing was scored (the graph is down or not seeded, a setting is missing): the run says
+  // nothing about the agent, so it must not exit the way a regression does.
+  console.error("INCOMPLETE: the eval stopped before scoring; the run cannot vouch for the agent.\n", error);
+  process.exit(EXIT.unmeasured);
 } finally {
   await closeDriver();
 }
