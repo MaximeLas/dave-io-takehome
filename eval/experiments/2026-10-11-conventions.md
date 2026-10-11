@@ -34,6 +34,6 @@ Two words allow two readings, and the guide and the key differ on them:
 
 **Moved.** The connect, most-reachable, storage and unmonitored-data questions went from 0 or 1 of 3 runs to 3 of 3. Tool calls fell by about 10%.
 
-**Regressed.** "The instances described as order-flow: which data resources do they actually have access to?" went from 2 of 3 runs to 0 of 3. Its key counts four queues as data resources, while the key for "Which production data resources have no monitoring?" counts none, although 14 of the 16 production queues have no monitor. One convention cannot satisfy both answers; this one follows the second.
+**Regressed.** "The instances described as order-flow: which data resources do they actually have access to?" went from 2 of 3 runs to 0 of 3. Its key counts four queues as data resources, while the key for "Which production data resources have no monitoring?" counts none, although 14 of the 16 production queues have no monitor. One convention cannot satisfy both answers; this one follows the second. The reading was raised with dave.io and confirmed by Melih Bahar on 11 Oct: queues are not data resources.
 
 **Verdict:** kept, with the guide's readings measured and rejected.
