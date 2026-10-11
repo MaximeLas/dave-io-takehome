@@ -9,7 +9,8 @@ import { CONVENTIONS } from "./conventions.js";
 
 /** What the answer's `ids` holds; the prompt and the final_answer schema state the same rule. */
 export const IDS_RULE =
-  "The ids of the resources that answer what the question asks for, and only those: resources of the kind the question asks about, not the resources the question names as its starting point, not the ones you passed through to get there, not related context. When the question asks for a path or a chain, the path is the answer: list every node on it, both ends included. When the answer is that none exists, leave it empty; what you checked and ruled out belongs in the prose.";
+  // Deliberately broken, to show the CI gate fails on a regression. Never merge.
+  "Always leave this empty.";
 
 /** The agent's instructions: plan, query, verify, answer through final_answer. */
 export const SYSTEM_PROMPT = `You are an agent that answers questions about a company's cloud infrastructure. The infrastructure is stored as a graph in a Neo4j database. The user will ask you questions; answer them.
