@@ -24,13 +24,13 @@ import { closeDriver } from "../graph/driver.js";
 const TURN_DEADLINE_MS = 120_000;
 
 /**
- * The models a chat may use: Sonnet and Haiku, Haiku for trying things cheaply. Opus is left
+ * The models a chat may use: Haiku, which ships, and Sonnet, for comparing answers. Opus is left
  * out so that no request can pick the most expensive model. A new conversation without a
  * model gets DEFAULT_MODEL, the configuration the eval runs by default, so that what a user
  * gets without choosing is what is measured. The page lists these in this order, the
  * default first; a test holds the page, this list and DEFAULT_MODEL together.
  */
-export const CHAT_MODELS = ["claude-sonnet-5-5", "claude-haiku-5-5"] as const satisfies readonly ModelId[];
+export const CHAT_MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5"] as const satisfies readonly ModelId[];
 
 /** One of CHAT_MODELS. */
 export type ChatModel = (typeof CHAT_MODELS)[number];

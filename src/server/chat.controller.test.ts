@@ -86,7 +86,7 @@ test("each invalid field is named in the error", async () => {
   assert.equal(await rejection(await postJson({ message: "hi", threadId: "abc" })), "threadId must be the id a previous reply returned.");
   assert.equal(
     await rejection(await postJson({ message: "hi", model: "claude-opus-5-5" })),
-    "model must be one of claude-sonnet-5-5, claude-haiku-5-5.",
+    "model must be one of claude-haiku-5-5, claude-sonnet-5-5.",
   );
 });
 

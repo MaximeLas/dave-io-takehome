@@ -25,7 +25,7 @@ export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type Effort = (typeof EFFORTS)[number];
 
 /** The model and effort the agent ships with. Changing either is its own commit with an eval run. */
-export const DEFAULT_MODEL: ModelId = "claude-sonnet-5-5";
+export const DEFAULT_MODEL: ModelId = "claude-haiku-5-5";
 export const DEFAULT_EFFORT: Effort = "high";
 
 /** The settings of one agent instance. */
