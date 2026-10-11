@@ -5,6 +5,8 @@
 // description in the answer schema, so the two cannot drift and the hash covers both.
 import { createHash } from "node:crypto";
 
+import { CONVENTIONS } from "./conventions.js";
+
 /** What the answer's `ids` holds; the prompt and the final_answer schema state the same rule. */
 export const IDS_RULE =
   "The ids of the resources that answer what the question asks for, and only those: resources of the kind the question asks about, not the resources the question names as its starting point, not the ones you passed through to get there, not related context. When the question asks for a path or a chain, the path is the answer: list every node on it, both ends included. When the answer is that none exists, leave it empty; what you checked and ruled out belongs in the prose.";
@@ -18,6 +20,8 @@ How to work:
 - Be correct and efficient.
 - Verify your answer before you give it.
 - When you have the answer, call the final_answer tool. This is required: a reply that ends without that call is not an answer, however complete the text. Its \`answer\` is prose for the user: it names every resource by its \`id\` property (for example aws:sqs:queue-commerce-prod-14), explains what you did and says how you verified it. Its \`ids\` is defined below.
+
+${CONVENTIONS}
 
 What goes in \`ids\`: ${IDS_RULE}
 

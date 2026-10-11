@@ -53,6 +53,7 @@ LangChain's `langchain-skills` pack was reviewed on 2026-10-08 and trails our pi
 - Start from the smallest version that answers a question end to end, then make one change at a time and measure each with the eval. The score, per question and overall, decides whether a change stays.
 - Added machinery (a new tool, a subagent, a second model call) earns its place by a measured gain in correctness, cost or speed.
 - Read the agent's trace (its plan, tool calls and their results) when a question fails; the score says that it failed, the trace says why.
+- A change that affects what the agent answers adds its file to `eval/experiments/` in the same commit (the folder's README says what an entry holds and how a change is measured): the failure pattern it targets, the hypothesis, the runs before and after, what moved and what regressed.
 - The model id lives in one place in `src/agent/`. Changing it, or upgrading a dependency, is its own commit with an eval run, so a score change can be attributed.
 - The system prompt is one string whose hash goes into every run record, so a prompt change is attributable like a code change. The record also carries the git commit the code ran from (`-dirty` when uncommitted), since the model reads the tools' text too.
 - The answer is structured (`answer` prose for the user, `ids` for the eval), delivered by the model through a `final_answer` tool. One shape serves the chat and the eval, so what is scored is what the user reads; an eval-only answer format would score something that never ships.
