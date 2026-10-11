@@ -1,8 +1,10 @@
 // The one entry point that runs the agent on a question. The eval harness and the server
 // both call it, so what is scored is exactly what ships.
 import { execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
-import { isAIMessage, isToolMessage, type BaseMessage } from "@langchain/core/messages";
+import { HumanMessage, isAIMessage, isToolMessage, type BaseMessage } from "@langchain/core/messages";
+import { MemorySaver } from "@langchain/langgraph";
 
 import {
   ANSWER_SCHEMA,
@@ -23,6 +25,8 @@ import { costUsd, type RunRecord, type TokenUsage, type ToolCallRecord } from ".
 export interface RunInput {
   question: string;
   questionId?: string;
+  /** The conversation the question continues; without one, the run starts a new conversation. */
+  threadId?: string;
 }
 
 /** What a caller may vary per run; anything left out takes the shipped default. */
@@ -35,7 +39,28 @@ export interface RunOptions {
 
 const agents = new Map<string, ReturnType<typeof createInfraAgent>>();
 
-/** Runs the agent on one question and returns its record. Saving the record is the caller's call. */
+// Every conversation's messages, by thread id, held in this process's memory: it keeps
+// every step of every conversation until the process ends, and a restart forgets them all,
+// which a demo chat can afford. A persistent checkpointer (Postgres, SQLite) is a drop-in
+// replacement. An eval question gets a fresh thread, so it runs through the same agent the
+// chat uses and still starts from an empty conversation.
+const conversations = new MemorySaver();
+
+/**
+ * The messages of the latest turn: from the last user message to the end. The agent returns
+ * the whole conversation, and earlier turns have their own records, so a turn's record must
+ * not count them again.
+ */
+export function turnMessages(conversation: BaseMessage[]): BaseMessage[] {
+  const start = conversation.findLastIndex((m) => HumanMessage.isInstance(m));
+  if (start === -1) throw new Error("The conversation has no user message.");
+  return conversation.slice(start);
+}
+
+/**
+ * Runs the agent on one question, continuing `input.threadId` when given, and returns the
+ * record of this turn alone. Saving the record is the caller's call.
+ */
 export async function runAgent(input: RunInput, options: RunOptions = {}): Promise<RunRecord> {
   const settings: AgentSettings = {
     model: options.model ?? DEFAULT_MODEL,
@@ -45,24 +70,26 @@ export async function runAgent(input: RunInput, options: RunOptions = {}): Promi
   const key = `${settings.model}/${settings.effort}`;
   let agent = agents.get(key);
   if (!agent) {
-    agent = createInfraAgent(settings);
+    agent = createInfraAgent(settings, conversations);
     agents.set(key, agent);
   }
 
+  const threadId = input.threadId ?? randomUUID();
   const startedAt = new Date();
   const result = await agent.invoke(
     { messages: [{ role: "user", content: input.question }] },
-    options.signal ? { signal: options.signal } : undefined,
+    { configurable: { thread_id: threadId }, ...(options.signal ? { signal: options.signal } : {}) },
   );
   const finishedAt = new Date();
 
-  const messages = result.messages as BaseMessage[];
+  const messages = turnMessages(result.messages as BaseMessage[]);
   const { modelCalls, stopReasons, toolCalls, usage } = readTrace(messages);
   const answer = readAnswer(result.structuredResponse);
 
   return {
     runId: `${startedAt.toISOString().replace(/[:.]/g, "-")}-${input.questionId ?? "adhoc"}`,
     questionId: input.questionId ?? null,
+    threadId,
     question: input.question,
     model: settings.model,
     modelSettings: { effort: settings.effort, maxTokens: settings.maxTokens },

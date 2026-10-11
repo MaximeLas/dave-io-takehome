@@ -5,6 +5,7 @@
 // model id also selects a model-specific profile inside deepagents that alters the prompt
 // (see docs/facts.md).
 import { ChatAnthropic } from "@langchain/anthropic";
+import type { BaseCheckpointSaver } from "@langchain/langgraph";
 import { createDeepAgent, createFilesystemMiddleware } from "deepagents";
 import { createMiddleware, toolStrategy } from "langchain";
 import { z } from "zod";
@@ -72,8 +73,11 @@ const unforcedToolChoice = createMiddleware({
   wrapModelCall: (request, handler) => handler({ ...request, toolChoice: "auto" }),
 });
 
-/** Builds the deepagents agent from the model, the tools, the prompt and the answer shape. */
-export function createInfraAgent(settings: AgentSettings) {
+/**
+ * Builds the deepagents agent from the model, the tools, the prompt and the answer shape.
+ * The checkpointer keeps each conversation's messages under its thread id.
+ */
+export function createInfraAgent(settings: AgentSettings, checkpointer: BaseCheckpointSaver) {
   const model = new ChatAnthropic({
     model: settings.model,
     apiKey: requireEnv("APP_ANTHROPIC_API_KEY"),
@@ -86,6 +90,7 @@ export function createInfraAgent(settings: AgentSettings) {
     tools: [runCypher],
     systemPrompt: SYSTEM_PROMPT,
     responseFormat: toolStrategy(ANSWER_SCHEMA),
+    checkpointer,
     // deepagents adds its filesystem tools (ls, read_file, write_file, glob, grep...) to
     // every agent. They are noise here: the graph is the only source. A middleware with
     // the same name replaces the default one, and `read_file` is the one tool the library

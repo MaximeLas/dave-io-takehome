@@ -31,6 +31,8 @@ export interface TokenUsage {
 export interface RunRecord {
   runId: string;
   questionId: string | null;
+  /** The conversation this run is one turn of; a chat's turns share it, an eval question has its own. */
+  threadId: string;
   question: string;
   model: string;
   modelSettings: Record<string, unknown>;
@@ -50,7 +52,7 @@ export interface RunRecord {
   answer: string;
   /** The resource ids the answer asserts, for the eval; empty for "none". */
   ids: string[];
-  /** The whole conversation as the library serialises it, for reading a failed run. */
+  /** This turn's messages, from the user's on, as the library serialises them; earlier turns are in the records that share its `threadId`. */
   messages: unknown[];
 }
 

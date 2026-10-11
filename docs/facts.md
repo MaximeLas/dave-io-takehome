@@ -82,6 +82,14 @@ The filesystem middleware measures every tool result; one longer than 80,000 cha
 - Evidence: `grep -n -B2 "input_tokens: number" node_modules/@langchain/core/dist/messages/metadata.d.ts` (the comment says "Sum of all input token types"); after `npm run ask -- dlq-for-prod-2`, each `usage_metadata` in the saved `runs/*.json` has `input_tokens` equal to `cache_creation` plus `cache_read` plus a handful
 - Checked: 2026-10-08
 
+### Conversations: a checkpointer, a thread id, and a result that holds the whole thread
+
+`createDeepAgent({ checkpointer })` keeps each conversation's state under the `thread_id` passed at invoke (`{ configurable: { thread_id } }`); the next invoke on that id starts from the stored messages. The result's `messages` is then the whole conversation, every earlier turn included, so a per-turn record reads only the messages from the last user message on. `structuredResponse` is an untracked channel, never written to the checkpoint, so one turn's answer cannot carry over into the next when that turn ends without the answer tool. A turn that dies between a tool call and its result (a deadline, a crash) leaves a dangling call in the thread; the default middleware stack patches it before the next model call, so the conversation stays usable. The same default stack also summarizes a conversation that grows long.
+
+- Version: deepagents 1.14.2, langchain 1.5.16, @langchain/langgraph 1.4.21
+- Evidence: `grep -n "checkpointer?: BaseCheckpointSaver" node_modules/deepagents/dist/agent-*.d.ts`; `grep -n "structuredResponse = new UntrackedValue" node_modules/langchain/dist/agents/annotation.js`; `grep -n -B1 "createPatchToolCallsMiddleware()$" node_modules/deepagents/dist/langsmith-*.js` (in the main agent's default stack, after the summarization middleware); with `npm run serve` running, a follow-up such as "Which of those have a Datadog monitor?" posted with the first reply's `threadId` queries the ids of the first answer, and its saved record counts only its own model calls
+- Checked: 2026-10-11
+
 ## Anthropic SDK
 
 ### The SDK reads `ANTHROPIC_API_KEY`; this project's key is `APP_ANTHROPIC_API_KEY`

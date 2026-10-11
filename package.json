@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test eval/*.test.ts",
+    "test": "tsx --test eval/*.test.ts src/*/*.test.ts",
     "check": "tsx --env-file-if-exists=.env scripts/check-setup.ts",
     "ask": "tsx --env-file-if-exists=.env scripts/ask.ts",
     "eval": "tsx --env-file-if-exists=.env scripts/eval.ts"
