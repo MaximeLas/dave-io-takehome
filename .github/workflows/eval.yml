@@ -1,0 +1,95 @@
+# The regression gate: every pull request and every push to main runs the thirty eval
+# questions through the agent as it ships and fails when the pass count drops below the
+# committed baseline (eval/baselines/). The eval's exit code is the verdict; only 0 is green.
+#
+# Each run spends real model tokens: about 10 cents and three minutes on Haiku 5.5 at effort
+# high, the shipped configuration. A newer push to a pull request cancels the run it
+# supersedes; on main every commit keeps its verdict.
+name: eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: eval-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      # The seed service in docker-compose.yml sets this password once the data has loaded.
+      NEO4J_PASSWORD: neo4j
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Start Neo4j and load the graph
+        id: graph
+        # Neo4j first, then the seed in the foreground, so the step fails with it. The compose
+        # file's health check gives two cypher-shell starts 5 seconds, which a 2-core runner
+        # often misses while Neo4j warms up, so the wait is on the database itself: the seed's
+        # own login, retried for up to three minutes. The eval checks the node and relationship
+        # counts itself before the first question.
+        run: |
+          docker compose up -d --build neo4j
+          timeout 180 sh -c 'until docker compose exec -T neo4j cypher-shell -u neo4j -p homework-password "RETURN 1" >/dev/null 2>&1; do sleep 2; done'
+          docker compose run --rm --no-deps seed
+
+      - name: Neo4j's log, when it did not come up
+        if: ${{ failure() && steps.graph.outcome == 'failure' }}
+        run: docker compose logs --no-color --tail 200 neo4j
+
+      # Any index the agent's search reads is built here: after the graph is seeded, before the eval.
+
+      - name: Eval
+        env:
+          APP_ANTHROPIC_API_KEY: ${{ secrets.APP_ANTHROPIC_API_KEY }}
+        # The log goes inside runs/, which is gitignored: an untracked file would mark every
+        # record's code version as "-dirty".
+        run: |
+          set -o pipefail
+          mkdir -p runs
+          npm run eval 2>&1 | tee runs/eval.log
+
+      - name: Score on the run page
+        if: ${{ !cancelled() }}
+        # The per-question table and the verdict, from the line naming the model onwards; the
+        # log's tail when the eval stopped before printing its table.
+        run: |
+          [ -f runs/eval.log ] || exit 0
+          {
+            echo '## Eval'
+            echo '```'
+            if grep -q '^model ' runs/eval.log; then sed -n '/^model /,$p' runs/eval.log; else tail -n 40 runs/eval.log; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the run records
+        if: ${{ !cancelled() }}
+        # Every question's trace (tool calls, results, tokens), the eval record and the log, so
+        # a red run can be read after the runner is gone. One artifact per attempt, so a re-run
+        # keeps the traces of the run it repeats.
+        uses: actions/upload-artifact@v7
+        with:
+          name: runs-attempt-${{ github.run_attempt }}
+          path: runs/
+          if-no-files-found: ignore
