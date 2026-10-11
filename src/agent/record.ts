@@ -41,6 +41,8 @@ export interface RunRecord {
   finishedAt: string;
   durationMs: number;
   modelCalls: number;
+  /** Why each model call ended, in order (`tool_use`, `end_turn`, `max_tokens`…); the last says why the run stopped. */
+  stopReasons: string[];
   toolCalls: ToolCallRecord[];
   usage: TokenUsage;
   costUsd: number;

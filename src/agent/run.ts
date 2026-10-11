@@ -57,7 +57,7 @@ export async function runAgent(input: RunInput, options: RunOptions = {}): Promi
   const finishedAt = new Date();
 
   const messages = result.messages as BaseMessage[];
-  const { modelCalls, toolCalls, usage } = readTrace(messages);
+  const { modelCalls, stopReasons, toolCalls, usage } = readTrace(messages);
   const answer = readAnswer(result.structuredResponse);
 
   return {
@@ -72,6 +72,7 @@ export async function runAgent(input: RunInput, options: RunOptions = {}): Promi
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
     modelCalls,
+    stopReasons,
     toolCalls,
     usage,
     costUsd: costUsd(settings.model, usage),
@@ -93,20 +94,28 @@ function readAnswer(structuredResponse: unknown): Answer {
 
 // Walks the conversation the agent produced. Each AI message is one model call; its
 // tool_calls are matched to the tool messages that answered them by id. The final_answer
-// call is the answer itself, not a lookup, so it is left out of the tool calls.
+// call is the answer itself, not a lookup, so it is left out of the tool calls. The stop
+// reason is kept per call so a run cut at the token limit reads as that, not as a wrong
+// answer. An AI message without one is not a model call: the library appends one after
+// final_answer to carry the parsed answer.
 function readTrace(messages: BaseMessage[]): {
   modelCalls: number;
+  stopReasons: string[];
   toolCalls: ToolCallRecord[];
   usage: TokenUsage;
 } {
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
   const pending = new Map<string, ToolCallRecord>();
   const toolCalls: ToolCallRecord[] = [];
+  const stopReasons: string[] = [];
   let modelCalls = 0;
 
   for (const message of messages) {
     if (isAIMessage(message)) {
+      const stopReason = message.response_metadata?.stop_reason;
+      if (stopReason === undefined) continue;
       modelCalls += 1;
+      stopReasons.push(String(stopReason));
       const u = message.usage_metadata;
       if (u) {
         usage.inputTokens += u.input_tokens;
@@ -128,7 +137,7 @@ function readTrace(messages: BaseMessage[]): {
       }
     }
   }
-  return { modelCalls, toolCalls, usage };
+  return { modelCalls, stopReasons, toolCalls, usage };
 }
 
 // The commit the code ran from, with "-dirty" when the working tree had changes, so a

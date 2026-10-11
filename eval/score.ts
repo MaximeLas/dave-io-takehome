@@ -80,6 +80,8 @@ export interface Diagnostics {
   cutResults: number;
   durationMs: number;
   costUsd: number;
+  /** Why the last model call ended: `end_turn` on an empty answer is the model stopping in prose, `max_tokens` a cut-off. */
+  stopReason: string;
 }
 
 const CUT_RESULT = /^\d+ of \d+ rows shown/;
@@ -92,5 +94,6 @@ export function diagnostics(record: RunRecord): Diagnostics {
     cutResults: record.toolCalls.filter((call) => CUT_RESULT.test(call.output)).length,
     durationMs: record.durationMs,
     costUsd: record.costUsd,
+    stopReason: record.stopReasons.at(-1) ?? "unknown",
   };
 }

@@ -54,7 +54,7 @@ function row(r: QuestionResult): string {
     `exp ${String(s.expected).padStart(2)}  miss ${String(s.missing.length).padStart(2)}  extra ${String(s.extra.length).padStart(2)}  ` +
     `recall ${pct(s.recall).padStart(4)}  prec ${pct(s.precision).padStart(4)}  ` +
     `${String(d.toolCalls).padStart(2)} calls (${d.cypherErrors} err, ${d.cutResults} cut)  ${seconds(d.durationMs).padStart(4)}  ${cents(d.costUsd).padStart(6)}` +
-    (s.empty ? "  EMPTY ANSWER" : "")
+    (s.empty ? `  EMPTY ANSWER (stop: ${d.stopReason})` : "")
   );
 }
 

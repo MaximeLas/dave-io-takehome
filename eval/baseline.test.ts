@@ -14,7 +14,7 @@ const result = (id: string, status: QuestionResult["status"], empty = false): Qu
     status === "error"
       ? null
       : { pass: status === "pass", empty, expected: 1, asserted: empty ? 0 : 1, missing: [], extra: [], recall: empty ? 0 : 1, precision: 1 },
-  diagnostics: status === "error" ? null : { toolCalls: 1, cypherErrors: 0, cutResults: 0, durationMs: 1000, costUsd: 0.01 },
+  diagnostics: status === "error" ? null : { toolCalls: 1, cypherErrors: 0, cutResults: 0, durationMs: 1000, costUsd: 0.01, stopReason: "tool_use" },
   error: status === "error" ? "boom" : null,
 });
 

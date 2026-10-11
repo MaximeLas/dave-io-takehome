@@ -94,6 +94,7 @@ test("diagnostics count Cypher errors and cut results off the record", () => {
   const record = {
     durationMs: 1200,
     costUsd: 0.01,
+    stopReasons: ["tool_use", "tool_use", "end_turn"],
     toolCalls: [
       { name: "run_cypher", input: {}, output: "3 rows\ncolumns: id\na\nb\nc", isError: false },
       { name: "run_cypher", input: {}, output: "Cypher error: Invalid input", isError: true },
@@ -106,5 +107,6 @@ test("diagnostics count Cypher errors and cut results off the record", () => {
     cutResults: 1,
     durationMs: 1200,
     costUsd: 0.01,
+    stopReason: "end_turn",
   });
 });
