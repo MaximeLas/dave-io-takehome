@@ -2,7 +2,7 @@
 
 One file per change that affects what the agent answers (prompt, tools, model, settings), named by date and subject, committed with the change itself. Each says which failure pattern the change targets, the hypothesis, the change, the measurement, what moved and what regressed, and the verdict. A variant measured and rejected on the way is reported in the entry it belongs to.
 
-**How a change is measured.** Haiku 5.5 at effort high, three full runs of the thirty questions per variant, compared with the three runs before it. With nothing changed, a run moves by about ±2 passes, so a smaller gain is not a gain. The totals say whether a change helped; the per-question comparison says which questions moved and why.
+**How a change is measured.** Haiku 5.5 at effort high, three full runs of the thirty questions per variant (`npm run eval`, which runs three trials in one record, the measurement the gate makes), compared with the three runs before it. With nothing changed, a run moves by about ±2 passes, so a smaller gain is not a gain. The totals say whether a change helped; the per-question comparison says which questions moved and why.
 
 | Date | Experiment | Passed, before → after (3 runs each) |
 | --- | --- | --- |
