@@ -219,7 +219,7 @@ The agent did not change between the third row's "after" and the fourth row's "b
 - **"Reach" and "connect" as permission,** and **"storage" as buckets and databases:** measured together against the blind reading, 24, 25, 25 against 22, 21, 21 (above).
 - **Which resource kinds make up a business area:** without it, the business-area prompt fell to 23, 24, 23 (three runs).
 
-The business-area lines were also written from the failing traces. The variant that shipped was chosen on the eval from totals inside the noise (27, 27, 24 over 25, 26, 26), so its gain is not held-out evidence. Per question the gain is large:
+The business-area lines were also written from the failing traces. The variant that shipped was chosen on the eval over its closest alternative, identical except that it also named target groups among an area's configuration, from totals inside the noise (27, 27, 24 against 25, 26, 26), so its gain is not held-out evidence. Per question the gain is large:
 
 - **"Which prod resources are related to checkout or order flow?"** went from 0 of 11 runs on the previous prompt to 3 of 3.
 - **"Which resources are involved in fulfillment?"** went from 2 of 11 to 3 of 3.
@@ -358,30 +358,32 @@ Two loops first: one that improves the agent from its failing traces, one that g
 
 Written down as the work went, published here at the end: the context, the choice, what was rejected.
 
-1. **One package, one entry point.** An eval protects production only if it scores what production runs. Rejected: a multi-package workspace, worth it only with several teams or deployables.
-2. **One generic read-only query tool first.** The model writes working Cypher (2, 2 and 6 errors in 168 to 178 tool calls across the baseline's three trials), and no failure so far asks for a specific tool. Rejected:
+The full record, each decision with its rejected options, its evidence and what would change it, plus the decisions implied here and stated nowhere else, is in [`docs/decisions.md`](docs/decisions.md).
+
+1. **[One package, one entry point.](docs/decisions.md#why-one-package-with-one-entry-point-shared-by-the-chat-and-the-eval)** An eval protects production only if it scores what production runs. Rejected: a multi-package workspace, worth it only with several teams or deployables.
+2. **[One generic read-only query tool first.](docs/decisions.md#why-one-generic-cypher-tool-and-not-a-tool-per-question-shape)** The model writes working Cypher (2, 2 and 6 errors in 168 to 178 tool calls across the baseline's three trials), and no failure so far asks for a specific tool. Rejected:
    - specific tools first, which cover only what was foreseen
    - a keyword filter as the guard, which is brittle
    - a read-only user, which Community does not offer
-3. **One structured answer for the chat and the eval.** Prose names ids it ruled out, so the claim must be separate from the explanation. Rejected:
+3. **[One structured answer for the chat and the eval.](docs/decisions.md#why-does-the-answer-come-through-a-tool-call-with-separate-ids-and-not-as-prose)** Prose names ids it ruled out, so the claim must be separate from the explanation. Rejected:
    - searching the prose for ids
    - a second model call to extract them
    - an eval-only format
    - a retry on prose endings, which hides what the prompt should fix
-4. **A multi-turn chat on the same entry point**, with LangGraph's in-memory checkpointer; the eval passes no thread, so every question starts fresh. Rejected:
+4. **[A multi-turn chat on the same entry point](docs/decisions.md#why-a-multi-turn-chat-on-the-same-entry-point-with-memory-that-does-not-survive-a-restart)**, with LangGraph's in-memory checkpointer; the eval passes no thread, so every question starts fresh. Rejected:
    - stateless requests
    - a persistent store, a one-line swap when needed
-5. **Queues are not data resources.** Rejected: counting queues, which fails the other question.
-6. **The eval gates every pull request and push to `main`.** Rejected:
+5. **[Queues are not data resources.](docs/decisions.md#why-are-queues-not-data-resources-when-the-key-counts-them-once)** Rejected: counting queues, which fails the other question.
+6. **[The eval gates every pull request and push to `main`.](docs/decisions.md#why-does-the-eval-gate-every-pull-request-and-push-to-main)** Rejected:
    - path filters, since a change to the questions could skip the eval
    - testing the pull request's head instead of the merge result
    - editing the provided compose file
-7. **The baseline follows the agent that ships**, retaken after every change. Reversed by decision 9: retaking after every change ratchets.
-8. **Three trials, three rules.** One run against one stored run needed a tolerance of 3, letting three solid questions go, and cost was ungated. Rejected:
+7. **[The baseline follows the agent that ships](docs/decisions.md#why-does-the-baseline-move-only-on-purpose-and-not-after-every-green-run)**, retaken after every change. Reversed by decision 9: retaking after every change ratchets.
+8. **[Three trials, three rules.](docs/decisions.md#why-three-trials-against-a-three-trial-baseline-and-not-one-run-or-five)** One run against one stored run needed a tolerance of 3, letting three solid questions go, and cost was ungated. Rejected:
    - a baseline that follows green runs, which ratchets
    - hand-set allowances, an argument at each accept
    - a cost rule that relaxes when the score rises, which needs an exchange rate between cents and questions
    - five accept trials for now, a bigger build (item 4 of the next steps above)
-9. **The baseline moves on a gain or a signed trade.** Rejected:
+9. **[The baseline moves on a gain or a signed trade.](docs/decisions.md#why-does-the-baseline-move-only-on-purpose-and-not-after-every-green-run)** Rejected:
    - a retake for cost headroom, which hides cumulative drift
    - a scheduled retake, a calendar in place of a reason
