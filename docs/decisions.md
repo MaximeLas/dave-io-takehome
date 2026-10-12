@@ -15,7 +15,7 @@ Numbers come from committed files only: the experiment files in [`eval/experimen
 - The agent: [one entry point](#why-one-package-with-one-entry-point-shared-by-the-chat-and-the-eval), [one generic query tool](#why-one-generic-cypher-tool-and-not-a-tool-per-question-shape), [the conventions](#how-were-the-reading-conventions-kept-from-fitting-the-thirty-questions), [queues and data](#why-are-queues-not-data-resources-when-the-key-counts-them-once), [the model](#why-ship-haiku-at-effort-high-rather-than-sonnet)
 - Retrieval: [local embeddings](#why-a-local-embedding-model-rather-than-a-hosted-one), [the search's cut and role](#why-a-top-10-search-beside-word-matching-and-not-a-similarity-threshold)
 - The answer: [a tool call with ids](#why-does-the-answer-come-through-a-tool-call-with-separate-ids-and-not-as-prose)
-- The eval: [exact match](#why-exact-match-on-ids-and-not-recall-above-a-threshold), [a hand-built harness](#why-a-hand-built-harness-rather-than-langsmith-or-braintrust), [the key as reference](#why-trust-the-answer-key-and-what-happens-where-it-reads-a-question-differently)
+- The eval: [exact match](#why-exact-match-on-ids-and-not-recall-above-a-threshold), [the metrics and the two gated](#why-these-metrics-and-why-are-only-two-gated), [a hand-built harness](#why-a-hand-built-harness-rather-than-langsmith-or-braintrust), [the key as reference](#why-trust-the-answer-key-and-what-happens-where-it-reads-a-question-differently)
 - The gate: [every pull request](#why-does-the-eval-gate-every-pull-request-and-push-to-main), [three trials](#why-three-trials-against-a-three-trial-baseline-and-not-one-run-or-five), [the baseline moves on purpose](#why-does-the-baseline-move-only-on-purpose-and-not-after-every-green-run)
 - The server: [multi-turn, in memory](#why-a-multi-turn-chat-on-the-same-entry-point-with-memory-that-does-not-survive-a-restart)
 
@@ -184,6 +184,25 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 
 **What would change it.** Questions whose answer is not a set, such as the prose's quality, which need a judge checked against a person's labels; or the key audit recording a second valid set for a question.
 
+### Why these metrics, and why are only two gated?
+
+**Choice.** Besides the pass, every run reports recall, precision, empty answers, the passes against the amended key, cost, tool calls, Cypher errors, cut results, duration and the stop reason of an empty answer, all computed by code from the run record (`eval/score.ts`, `eval/record.ts`). Retrieval is measured offline on its own dev set (`scripts/measure-search.ts`). Two quantities gate: the pass count (rules 1 and 2) and the cost (rule 3). The next two checks are designed and not yet built: whether each asserted id appears in a tool output of its run, and whether the prose names the ids it asserts. The argument, metric by metric, is [`SOLUTION.md` § What is measured, and why](../SOLUTION.md#what-is-measured-and-why).
+
+**Why.** Each metric answers a failure read in a trace (padding, broken answer contracts, wandering queries) or a question the thirty cannot answer (whether the search finds descriptions worded differently). Code grades wherever it can, as Anthropic's evals guidance and Husain and Shankar's recommend, because the claims are ids and the evidence is stored text. A metric gates once it is steady across runs and has an agreed budget (`AGENTS.md` § Scoring); the pass count and the cost meet that, and are what a regression costs: a wrong answer, or a dearer one.
+
+**Rejected.**
+
+- Gating recall or precision: a drop in either already fails a question, which the pass gates; as gates they add a threshold to argue over, and as means over the non-empty answers they rise when the agent answers fewer.
+- Gating tool calls: one three-trial run on 12 Oct spread from 157 to 176 calls with nothing changed ([meaning search](../eval/experiments/2026-10-12-meaning-search.md)), and what extra calls cost already shows in rule 3.
+- Gating duration: it depends on the machine and the API's load as well as on the agent; cost does not.
+- Text similarity of the prose to a reference answer: no reference prose exists, and the prose may rightly vary.
+- A model judge, now: for groundedness, code is exact; for what code cannot check (the prose asserting a different set from the `ids`, the prose's quality), a judge must first be validated against a person's labels, binary and one failure mode per judge, and no labelled set exists yet.
+- Judges on a 1-to-5 scale: a middle score says nothing a person can act on, and binary verdicts are labelled more consistently.
+
+**Evidence.** Recall of about 90% beside precision of 61 to 74% on 11 Oct (three runs, [the `ids` rule](../eval/experiments/2026-10-11-ids-rule.md)) named the first change, 13, 11, 10 passes to 20, 21, 21. Sonnet's empty answers, 2, 2 and 3 in 30 with every stop reason `end_turn`, decided the model ([shipped model](../eval/experiments/2026-10-11-shipped-model.md)). On the baseline (commit `8bf30c0`) recall is 95%, 94%, 94%, precision 94%, 97%, 97%, and no answer is empty.
+
+**What would change it.** A reported metric that holds steady across accepts, with a budget the team agrees on, becomes a rule. A labelled set of runs makes the first judge buildable. A question whose answer is not a set of ids needs a grader of its own.
+
 ### Why a hand-built harness rather than LangSmith or Braintrust?
 
 **Choice.** The harness is three small modules: `eval/harness.ts` runs the questions through `runAgent`, `eval/score.ts` scores each answer, and `eval/baseline.ts` holds the gate. The baseline is a JSON file committed beside the code, and every run's full trace is a local record that `web/run.html` lays out.
@@ -250,7 +269,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 - A cost rule that relaxes when the score rises: it needs an exchange rate between cents and questions.
 - Five trials at one accept for the solid set: 24% entry by luck for a question at 75% (0.75⁵), against 18% for the second round, which also costs nothing extra for a question that fails early.
 
-**Evidence.** Baseline (commit `8bf30c0`, taken on `b0fb213`, prompt `1d555744`): 24, 26, 26 passes, tolerance 2; 8.6 cents a trial, margin 1.06 cents; 24 solid questions, all 24 entrants passing the second round's three runs (72 runs, 18.2 cents). Simulated on that baseline, rule 2 turns unchanged code red 4.5% of the time against 14.8% under the one-round entry, and the gate as a whole about one run in nine against one in five; red again on one re-run about one in twenty-five ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-five), `npm run simulate-gate`, [the experiment](../eval/experiments/2026-10-13-solid-six.md)). The previous baseline (commit `268529c`), under the one-round entry, was 25, 26, 26 with tolerance 1, 8.9 cents with margin 0.73, 25 solid questions.
+**Evidence.** Baseline (commit `8bf30c0`, taken on `b0fb213`, prompt `1d555744`): 24, 26, 26 passes, tolerance 2; 8.6 cents a trial, margin 1.06 cents; 24 solid questions, all 24 entrants passing the second round's three runs (72 runs, 18.2 cents). Simulated on that baseline, rule 2 turns unchanged code red 4.5% of the time against 14.8% under the one-round entry, and the gate as a whole about one run in nine against one in five; red again on one re-run about one in twenty-seven ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-seven), `npm run simulate-gate`, [the experiment](../eval/experiments/2026-10-13-solid-six.md)). The previous baseline (commit `268529c`), under the one-round entry, was 25, 26, 26 with tolerance 1, 8.9 cents with margin 0.73, 25 solid questions.
 
 **Revised.** The first estimate said one in a hundred after a re-run: it treated the re-run as independent, when both runs face the same solid set.
 
