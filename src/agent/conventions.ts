@@ -2,8 +2,8 @@
 // this estate, written down so every run reads them the same way.
 //
 // Each line is a stated assumption about the domain, not a fix for one question; if one turns
-// out wrong, it is changed here and the eval measures the change. Most were written by an
-// engineer who explored the live graph without seeing the eval questions. Three terms allow two
+// out wrong, it is changed here and the eval measures the change. Most were written by a
+// Claude agent given the live graph and nothing else. Three terms allow two
 // readings, and the line says which one is taken and why: "reach" or "connect" (permission or
 // network), "storage" (buckets alone, or buckets and databases), and a business area (the
 // resources that do its work, each by its own description, or the compute described as the
