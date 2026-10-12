@@ -3,17 +3,18 @@
 //
 // Each line is a stated assumption about the domain, not a fix for one question; if one turns
 // out wrong, it is changed here and the eval measures the change. Most were written by an
-// engineer who explored the live graph without seeing the eval questions. Two words allow two
+// engineer who explored the live graph without seeing the eval questions. Three terms allow two
 // readings, and the line says which one is taken and why: "reach" or "connect" (permission or
-// network) and "storage" (buckets alone, or buckets and databases). No label or relationship
-// names appear: the agent reads the schema from the live graph, so this text cannot go stale
-// when the graph changes shape.
+// network), "storage" (buckets alone, or buckets and databases), and a business area (the
+// resources that do its work, each by its own description, or the compute described as the
+// area plus whatever it is wired to). No label or relationship names appear: the agent reads
+// the schema from the live graph, so this text cannot go stale when the graph changes shape.
 
 /** The conventions section of the system prompt. */
 export const CONVENTIONS = `How to read the questions:
-- Environment: a resource's environment is the prod or dev marker in its name. A dev resource whose description compares itself to production is still dev, and some identifiers omit the marker, so read names. Stay inside the environment the question asks about.
-- Business areas are not resources: storefront means web or customer entry, catalog means product information, checkout means order flow or purchase, fulfillment means shipment or background work. Assign compute to an area by its description, confirmed by its deployment pipeline, scaling group and target group.
-- The graph over the descriptions: relationships and recorded attributes are the facts; descriptions are vague hints, and the only source for a resource's purpose or the kind of data it holds. When a description and the graph disagree, answer from the graph and mention the description. Answer "what kind of data or purpose" from descriptions, and "what uses or has access to" by following the graph from the compute.
+- Environment: a resource's environment is the prod or dev marker in its name. A dev resource whose description compares itself to production is still dev, and some identifiers omit the marker, so read names. Stay inside the environment the question names; a question that names none covers both.
+- Business areas are not resources: a resource belongs to an area when its own description places it there. The descriptions are hedged on purpose ("near", "-adjacent", "-flavored", "-style"), so hedged wording still places a resource in the area it names. Storefront means web or customer entry, catalog means product information, checkout means order flow or purchase, fulfillment means shipping orders. An area is a business purpose, not a technical pattern: background work, events and dead-letter handling belong to the area their description names, and to none when it names none. An area's resources are the ones that do its work: instances, load balancers, databases, buckets, queues and monitors; one resource can belong to several areas. Repositories and workflows, identity, network, and scaling or launch configuration are how those resources are built, deployed and secured, not part of the area; the graph reaches them when a question asks for them.
+- Descriptions and the graph answer different questions. A description is the only source for what a resource is for: its area, the kind of data it holds. Relationships and recorded attributes are the facts about what it is connected to: what can reach it, what it calls, what deploys to it, what monitors it. Use each for its own question and let neither overrule the other: a resource described as one area stays in that area when the graph wires it to compute described as another, and the prose says so. To find what uses, reaches or watches something, follow the graph from that resource, not from the compute you expect to use it.
 - Access and reach mean permission: "access", "reach", "connect to" and "is allowed to", said of compute and a resource, follow the identity chain: the compute's instance profile, the role it assumes, the role's attached policies, the resource they grant (for a bucket, through the bucket's own policy). The network rules here record ingress between groups only, with no egress, network ACLs or public addresses, and they do not match the calls the services make, so they cannot show that a connection works. Answer from them when the question is about network rules, ports or traffic; when they disagree with the permissions on an access question, say so in the prose.
 - A permission is not usage: it does not say read or write, producer or consumer. Do not claim who sends to or consumes from a queue.
 - Declared calls between instances are application dependencies, separate from network rules; never answer one with the other.

@@ -9,3 +9,4 @@ One file per change that affects what the agent answers (prompt, tools, model, s
 | 2026-10-11 | [The `ids` rule](2026-10-11-ids-rule.md) | 13, 11, 10 → 20, 21, 21 |
 | 2026-10-11 | [How a cloud engineer reads the questions](2026-10-11-conventions.md) | 20, 21, 21 → 24, 25, 25 |
 | 2026-10-11 | [The shipped model: Haiku instead of Sonnet](2026-10-11-shipped-model.md) | Sonnet 22, 23, 23 → Haiku 24, 25, 25, 24 |
+| 2026-10-12 | [How the agent reads a business area](2026-10-12-business-area.md) | 25, 25, 25, 24 → 27, 27, 24 |
