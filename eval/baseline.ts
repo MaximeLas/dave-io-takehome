@@ -6,25 +6,49 @@
 // The model samples, so the same agent scores differently from run to run; the gate therefore
 // reads trials, not single runs, and holds three rules, each a one-sided check for a drop:
 //   1. the average: the mean pass count may not fall by more than the pass tolerance;
-//   2. the solid set: a question that passed every baseline trial may fail at most one trial
-//      (two of three), while the other questions are reported, never gated;
+//   2. the solid set: a question that passed every trial of both accept rounds may fail at most
+//      one trial (two of three), while the other questions are reported, never gated;
 //   3. cost: the mean cost per trial may not rise by more than the cost margin.
 // Both allowances are measured at accept from the spread of the three trials; they live in the
-// baseline file, so a threshold is versioned with the scores it protects. Rule 2 has no allowance,
-// and a question that passes most of the time can enter the solid set by three lucky draws, so the
-// gate as a whole turns red on unchanged code about one run in nine, and about one in thirty again
-// on a re-run, which meets the same baseline (`npm run simulate-gate`, eval/simulate.ts, from the
-// committed baseline); a red run's first move is one re-run. A green run never becomes
-// the baseline by itself: with any tolerance, a baseline that followed every green run could ratchet
-// down one question at a time.
+// baseline file, so a threshold is versioned with the scores it protects.
+//
+// Rule 2 has no allowance, so what it costs in false reds depends on how a question enters the
+// solid set. Three passes are cheap to draw by luck: a question that passes 75% of the time does it
+// 42% of the time (0.75^3), then fails two of three in a later run and turns the gate red on code
+// that did not change. So the accept runs a second round: each question that passed all three
+// trials runs up to three more times alone, stopped at its first failure, and only a question that
+// passes all six enters (0.75^6, 18%). A stable question costs three more runs, an unstable one
+// stops early, and the round's cost is recorded, not gated. Six draws still let a question at 85%
+// in about four times in ten (0.85^6), so the gate can still go red on unchanged code
+// (`npm run simulate-gate`, eval/simulate.ts, estimates how often); a red run's first move is one
+// re-run. The mean and the cost come from the three full trials only, which every later run
+// repeats. A green run never becomes the baseline by itself: with any tolerance, a baseline that
+// followed every green run could ratchet down one question at a time.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { USAGE_EXIT } from "../src/cli.js";
-import { cents, type Comparison, type EvalRun, type EvalTotals } from "./record.js";
+import { cents, type Comparison, type EvalRun, type EvalTotals, type SecondRound } from "./record.js";
 
-/** The committed scores for one model and effort, taken over `trials` runs of every question. */
+/** The baseline file's format; a file in an earlier format is refused before any token is spent. */
+export const BASELINE_FORMAT = 2;
+
+/** What the baseline keeps of the second accept round. */
+export interface SecondRoundScores {
+  /** The most runs a question gets in the round. */
+  runsPerQuestion: number;
+  /** Per question that passed every first-round trial: the runs it passed before its first failure, out of `runsPerQuestion`. */
+  passes: Record<string, number>;
+  /** Agent runs the round made. */
+  runs: number;
+  /** What the round cost; recorded, never gated (rule 3 reads the three full trials). */
+  costUsd: number;
+}
+
+/** The committed scores for one model and effort, taken over `trials` runs of every question and a second round on the questions that passed them all. */
 export interface Baseline {
+  /** The file's format, `BASELINE_FORMAT`. */
+  format: number;
   model: string;
   effort: string;
   promptVersion: string;
@@ -41,14 +65,20 @@ export interface Baseline {
   costUsd: number[];
   /** How far the mean cost per trial may rise before the build fails (rule 3). */
   costMarginUsd: number;
-  /** Per question, the trials it passed; those at `trials` make up the solid set (rule 2). */
+  /** Per question, the trials it passed in the first round; those at `trials` ran the second round. */
   questions: Record<string, number>;
+  /** The second accept round, on the questions at `trials` of `trials`. */
+  secondRound: SecondRoundScores;
+  /** The solid set (rule 2): the questions that passed every trial of both rounds, in question order. */
+  solid: string[];
   /** Each trial's totals, for the metrics that are reported and not gated. */
   trialTotals: EvalTotals[];
 }
 
 /** The trials a baseline is taken on, and so the trials a gated run needs. */
 export const BASELINE_TRIALS = 3;
+/** The most runs a question gets in the second accept round; three more draws make six with the first round's. */
+export const SECOND_ROUND_RUNS = 3;
 // Both allowances follow one principle: the spread of the three accept trials (highest minus
 // lowest). For draws with a standard deviation s, the expected spread of three is about 1.7 s, close
 // to two standard errors of the gap between two means of three (1.6 s): the usual 95% band, measured
@@ -71,7 +101,7 @@ export function baselinePath(model: string, effort: string): string {
   return path.join(BASELINES_DIR, `${model}.${effort}.json`);
 }
 
-/** The committed baseline for a model and effort, or null when none was accepted yet; throws on a file in the old one-run format. */
+/** The committed baseline for a model and effort, or null when none was accepted yet; throws on a file in an earlier format. */
 export async function loadBaseline(model: string, effort: string): Promise<Baseline | null> {
   const file = baselinePath(model, effort);
   let raw: string;
@@ -85,7 +115,26 @@ export async function loadBaseline(model: string, effort: string): Promise<Basel
   if (typeof baseline.trials !== "number") {
     throw new Error(`${file} was taken from a single run, a format the gate no longer reads; take a new baseline with npm run eval -- --accept.`);
   }
+  if (baseline.format !== BASELINE_FORMAT) {
+    throw new Error(`${file} was taken with one accept round, a format the gate no longer reads; take a new baseline with npm run eval -- --accept.`);
+  }
   return baseline as Baseline;
+}
+
+/** The questions that run the second accept round: those that passed every trial of the first, in question order. */
+export function secondRoundEntrants(run: EvalRun): string[] {
+  return run.questions.filter((q) => q.passes === run.summary.trials).map((q) => q.id);
+}
+
+/** What the baseline keeps of a second round; throws when a run in it threw, since an error says nothing about the question. */
+export function secondRoundScores(round: SecondRound): SecondRoundScores {
+  if (round.errors > 0) throw new Error("A second round with errors cannot become part of the baseline: re-run it.");
+  return {
+    runsPerQuestion: round.runsPerQuestion,
+    passes: Object.fromEntries(round.questions.map((q) => [q.id, q.passes])),
+    runs: round.runs,
+    costUsd: round.costUsd,
+  };
 }
 
 /** Compares a full eval run with a baseline taken on the same number of trials, under the three rules. */
@@ -107,7 +156,7 @@ export function compare(run: EvalRun, baseline: Baseline): Comparison {
   };
 
   const passes = new Map(run.questions.map((q) => [q.id, q.passes]));
-  const solidIds = Object.keys(baseline.questions).filter((id) => baseline.questions[id] === n);
+  const solidIds = baseline.solid;
   const broken = solidIds.filter((id) => (passes.get(id) ?? 0) < n - 1);
   const solid = { held: broken.length === 0, solidCount: solidIds.length, broken };
 
@@ -176,13 +225,23 @@ export function gate(run: EvalRun, baseline: Baseline | null, accepting: boolean
   return { comparison, exit: EXIT[comparison.verdict], line: verdict };
 }
 
-/** Turns a full, error-free run of the baseline's trial count into the baseline, measuring both allowances from its spread. */
-export function baselineFrom(run: EvalRun): Baseline {
+/**
+ * Turns a full, error-free run of the baseline's trial count, and the second round run on its
+ * questions at every trial, into the baseline: both allowances measured from the three trials'
+ * spread, the solid set from the questions that passed every run of both rounds.
+ */
+export function baselineFrom(run: EvalRun, second: SecondRoundScores): Baseline {
   if (!run.full) throw new Error("Only a run over every question can become the baseline.");
   if (run.summary.errors > 0) throw new Error("A run with errors cannot become the baseline: re-run it first.");
   if (run.summary.trials !== BASELINE_TRIALS) throw new Error(`A baseline is taken on ${BASELINE_TRIALS} trials, not ${run.summary.trials}.`);
+  const entrants = secondRoundEntrants(run);
+  const ran = Object.keys(second.passes);
+  if (ran.length !== entrants.length || entrants.some((id) => !(id in second.passes))) {
+    throw new Error(`The second round must run exactly the questions that passed every trial (${entrants.join(", ")}), not ${ran.join(", ")}.`);
+  }
   const costUsd = run.trialTotals.map((t) => t.costUsd);
   return {
+    format: BASELINE_FORMAT,
     model: run.model,
     effort: run.effort,
     promptVersion: run.promptVersion,
@@ -195,8 +254,50 @@ export function baselineFrom(run: EvalRun): Baseline {
     costUsd,
     costMarginUsd: Math.max(Math.max(...costUsd) - Math.min(...costUsd), MIN_COST_MARGIN_SHARE * run.summary.meanCostUsd),
     questions: Object.fromEntries(run.questions.map((q) => [q.id, q.passes])),
+    secondRound: second,
+    solid: entrants.filter((id) => second.passes[id] === second.runsPerQuestion),
     trialTotals: run.trialTotals,
   };
+}
+
+// Every metric a trial's totals carry, beside the baseline's, except those the gate already reads
+// (passed, by rules 1 and 2) or that follow from others (failed, questions) or stop the run (errors).
+// The type makes a new field of EvalTotals a compile error here until it is compared.
+type ComparedMetric = Exclude<keyof EvalTotals, "questions" | "passed" | "failed" | "errors">;
+const pct = (share: number) => `${Math.round(share * 100)}%`;
+const num = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+const signed = (d: number, show: (x: number) => string) => `${d >= 0 ? "+" : "-"}${show(Math.abs(d))}`;
+const METRICS: Record<ComparedMetric, { label: string; show: (x: number) => string; diff: (d: number) => string; note?: string }> = {
+  meanRecall: { label: "mean recall", show: pct, diff: (d) => `${signed(Math.round(d * 100), String)} pts` },
+  meanPrecision: { label: "mean precision", show: pct, diff: (d) => `${signed(Math.round(d * 100), String)} pts` },
+  passedAmended: { label: "passed, amended key", show: num, diff: (d) => signed(d, num), note: "not gated" },
+  empty: { label: "empty answers", show: num, diff: (d) => signed(d, num) },
+  toolCalls: { label: "tool calls", show: num, diff: (d) => signed(d, num) },
+  cypherErrors: { label: "Cypher errors", show: num, diff: (d) => signed(d, num) },
+  cutResults: { label: "cut results", show: num, diff: (d) => signed(d, num) },
+  costUsd: { label: "cost", show: (x) => cents(x, 2), diff: (d) => signed(d, (x) => cents(x, 2)), note: "judged by rule 3" },
+};
+
+/** The metrics that are compared with the baseline, in the order the report prints them. */
+export const COMPARED_METRICS = Object.keys(METRICS) as ComparedMetric[];
+
+/** Every stored metric of a run's trials against the baseline's, as a mean per trial; a metric the baseline predates reads as such. */
+export function metricDeltas(now: EvalTotals[], before: EvalTotals[]): string[] {
+  const avg = (ts: EvalTotals[], key: ComparedMetric) => {
+    const xs = ts.map((t) => t[key]).filter((x): x is number => typeof x === "number");
+    return xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length;
+  };
+  return [
+    "every stored metric, mean per trial, against the baseline (the three rules above are the verdict)",
+    ...COMPARED_METRICS.map((key) => {
+      const m = METRICS[key];
+      const a = avg(now, key);
+      const b = avg(before, key);
+      const value = a === null ? "n/a" : m.show(a);
+      const against = b === null ? "not in the baseline" : `baseline ${m.show(b)}${a === null ? "" : `, ${m.diff(a - b)}`}`;
+      return `  ${m.label.padEnd(22)}${value} (${against})${m.note ? `; ${m.note}` : ""}`;
+    }),
+  ];
 }
 
 /** Writes the baseline file and returns its path. */

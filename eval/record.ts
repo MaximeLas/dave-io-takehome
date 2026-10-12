@@ -111,12 +111,24 @@ export interface Comparison {
   verdict: "ok" | "regression" | "unmeasured";
   /** Rule 1: the mean pass count may not drop by more than the pass tolerance. */
   average: ThresholdRule;
-  /** Rule 2: a question that passed every baseline trial may fail at most one trial. */
+  /** Rule 2: a question that passed every trial of both accept rounds may fail at most one trial. */
   solid: { held: boolean; solidCount: number; broken: string[] };
   /** Rule 3: the mean cost per trial may not exceed the baseline's by more than the cost margin. */
   cost: ThresholdRule;
   /** Questions whose pass count moved against the baseline's, broken solid questions first. */
   flips: { id: string; baseline: number; run: number }[];
+}
+
+/** The second accept round: each question that passed every trial, run again alone up to `runsPerQuestion` times, stopped at its first failure. */
+export interface SecondRound {
+  runsPerQuestion: number;
+  /** Per question, its runs in order and the passes before the first failure; a last result that did not pass is that failure. */
+  questions: { id: string; passes: number; results: QuestionResult[] }[];
+  /** Agent runs made, at most `runsPerQuestion` per question. */
+  runs: number;
+  costUsd: number;
+  /** Runs that threw; any keeps the round out of a baseline. */
+  errors: number;
 }
 
 /** Everything about one eval run. */
@@ -136,10 +148,12 @@ export interface EvalRecord {
   trialTotals: EvalTotals[];
   summary: EvalSummary;
   comparison: Comparison | null;
+  /** Only on an accepting run: the second round that decides the solid set. */
+  secondRound?: SecondRound;
 }
 
-/** An eval run before its comparison with the baseline. */
-export type EvalRun = Omit<EvalRecord, "comparison">;
+/** An eval run before its comparison with the baseline and any second round. */
+export type EvalRun = Omit<EvalRecord, "comparison" | "secondRound">;
 
 export const EVAL_RUNS_DIR = path.join("runs", "eval");
 

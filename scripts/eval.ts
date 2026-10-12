@@ -12,8 +12,20 @@
 // is missing or in the old format), 3 on a usage error. Only 0 ships.
 import { parseArgs } from "node:util";
 
-import { BASELINE_TRIALS, baselineFrom, EXIT, gate, loadBaseline, saveBaseline, type Baseline, type GateVerdict } from "../eval/baseline.js";
-import { runEval } from "../eval/harness.js";
+import {
+  BASELINE_TRIALS,
+  baselineFrom,
+  EXIT,
+  gate,
+  loadBaseline,
+  metricDeltas,
+  saveBaseline,
+  SECOND_ROUND_RUNS,
+  secondRoundScores,
+  type Baseline,
+  type GateVerdict,
+} from "../eval/baseline.js";
+import { runEval, runSecondRound } from "../eval/harness.js";
 import { cents, saveEvalRun, type Comparison, type EvalRecord, type EvalTotals, type QuestionTrials } from "../eval/record.js";
 import { loadQuestions } from "../eval/questions.js";
 import type { Diagnostics } from "../eval/score.js";
@@ -36,7 +48,10 @@ Options:
   --model <id>       ${MODEL_IDS.join(", ")} (default: ${DEFAULT_MODEL}, what ships)
   --effort <level>   ${EFFORTS.join(", ")} (default: ${DEFAULT_EFFORT}, what ships)
   --accept           declare this run the new baseline for its model and effort
-                     (all questions, ${BASELINE_TRIALS} trials, committed code; then commit the file)
+                     (all questions, ${BASELINE_TRIALS} trials, committed code; then commit the file);
+                     each question that passed every trial then runs up to ${SECOND_ROUND_RUNS} more
+                     times alone, stopped at its first failure, and only those that pass all
+                     ${BASELINE_TRIALS + SECOND_ROUND_RUNS} make up the solid set the gate holds
   --help             print this help
 
 Exit code: 0 the baseline held (or the run was only reported), 1 a regression,
@@ -91,6 +106,7 @@ const fmt = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
 // A full run is compared with its baseline, so the baseline is read first: a file in the old
 // format stops the run before any model token is spent, unless this run is replacing it.
 let baseline: Baseline | null = null;
+let replacedFormat = false;
 if (!values.only) {
   try {
     baseline = await loadBaseline(model, effort);
@@ -99,6 +115,7 @@ if (!values.only) {
       console.error(`INCOMPLETE: ${(error as Error).message}`);
       process.exit(EXIT.unmeasured);
     }
+    replacedFormat = true;
   }
 }
 
@@ -155,33 +172,21 @@ function row(q: QuestionTrials, baselinePasses: number | undefined, passedWidth:
   return details.length > 0 ? [line, ...details, ""] : [line];
 }
 
-// The metrics that are reported and not gated, per trial, against the baseline's, so a drift is seen before it is gated.
-function deltas(now: EvalTotals[], before: EvalTotals[]): string[] {
-  const avg = (ts: EvalTotals[], pick: (t: EvalTotals) => number | null) => mean(ts.map(pick).filter((x): x is number => x !== null));
-  const num = (label: string, pick: (t: EvalTotals) => number) => {
-    const a = avg(now, pick)!;
-    const b = avg(before, pick)!;
-    return `  ${label.padEnd(22)}${fmt(a)} (baseline ${fmt(b)}, ${a >= b ? "+" : ""}${fmt(a - b)})`;
-  };
-  return [
-    "reported, not gated (mean per trial, against the baseline)",
-    num("tool calls", (t) => t.toolCalls),
-    num("Cypher errors", (t) => t.cypherErrors),
-    num("empty answers", (t) => t.empty),
-    `  ${"mean recall".padEnd(22)}${pct(avg(now, (t) => t.meanRecall))} (baseline ${pct(avg(before, (t) => t.meanRecall))})`,
-  ];
-}
-
 // The three rules, each opening with whether it held, so the line can be read from its first word.
 function rules(c: Comparison, b: Baseline): string[] {
   const verdict = (held: boolean) => (held ? "held  " : "FAILED");
+  const draws = b.trials + b.secondRound.runsPerQuestion;
+  const leftInSecond = Object.keys(b.secondRound.passes).filter((id) => !b.solid.includes(id));
   const lines = [
     `gate against ${c.baselineFile}`,
     `  baseline  ${b.trials} trials on ${b.codeVersion}; passed ${b.passed.join(", ")}; cost ${b.costUsd.map(gateCents).join(", ")}`,
     `  rule 1    ${verdict(c.average.held)}  average: mean ${fmt(c.average.value)} passes, floor ${fmt(c.average.limit)} (baseline ${fmt(c.average.baseline)} - tolerance ${c.average.allowance})`,
-    `  rule 2    ${verdict(c.solid.held)}  solid set: the ${c.solid.solidCount} questions at ${b.trials} of ${b.trials} in the baseline must pass at least ${b.trials - 1} of ${b.trials}`,
+    `  rule 2    ${verdict(c.solid.held)}  solid set: the ${c.solid.solidCount} questions that passed all ${draws} accept draws must pass at least ${b.trials - 1} of ${b.trials}`,
   ];
   for (const id of c.solid.broken) lines.push(`                    broken: ${id} (${c.flips.find((f) => f.id === id)?.run ?? 0} of ${b.trials})`);
+  if (leftInSecond.length > 0) {
+    lines.push(`                    not gated: ${leftInSecond.join(", ")} (${b.trials} of ${b.trials} in the baseline's trials, then a failure in its second round)`);
+  }
   lines.push(
     `  rule 3    ${verdict(c.cost.held)}  cost: mean ${gateCents(c.cost.value)} per trial, ceiling ${gateCents(c.cost.limit)} (baseline ${gateCents(c.cost.baseline)} + margin ${gateCents(c.cost.allowance)})`,
   );
@@ -200,7 +205,16 @@ try {
     onQuestion: (r, t) => console.log(`  done ${r.id}${trials > 1 ? ` trial ${t}` : ""} (${r.status}, ${seconds(Date.now() - started)} in)`),
   });
   verdict = gate(run, baseline, values.accept);
+  if (replacedFormat && verdict.line.startsWith("ACCEPTING: no baseline")) {
+    verdict = { ...verdict, line: `ACCEPTING: the committed baseline is in an earlier format the gate no longer reads, so this run replaces it uncompared` };
+  }
   record = { ...run, comparison: verdict.comparison };
+  // Accepting a clean run: the second round decides which of the questions at every trial are solid.
+  if (values.accept && run.full && run.summary.errors === 0) {
+    record.secondRound = await runSecondRound(run, {
+      onRun: (r, attempt) => console.log(`  done ${r.id} second round ${attempt} (${r.status}, ${seconds(Date.now() - started)} in)`),
+    });
+  }
 } catch (error) {
   // Nothing was scored (the graph is down or not seeded, a setting is missing): the run says
   // nothing about the agent, so it must not exit the way a regression does.
@@ -257,17 +271,24 @@ block(
   ...(firstFailure ? [field("traces", `npm run serve, then http://localhost:3000/run.html?id=${firstFailure.runId}`)] : []),
 );
 
-if (c && baseline) block(...rules(c, baseline), "", ...deltas(record.trialTotals, baseline.trialTotals));
+if (c && baseline) block(...rules(c, baseline), "", ...metricDeltas(record.trialTotals, baseline.trialTotals));
 
-if (values.accept && s.errors === 0) {
-  const accepted = baselineFrom(record);
+const second = record.secondRound;
+if (values.accept && second && second.errors === 0) {
+  const accepted = baselineFrom(record, secondRoundScores(second));
   const file = await saveBaseline(accepted);
+  const left = second.questions.filter((q) => q.passes < second.runsPerQuestion);
   block(
-    `accepted as the baseline: ${file}`,
+    `accepted as the baseline: ${file}${replacedFormat ? " (replacing a file in an earlier format)" : ""}`,
     `  passed ${accepted.passed.join(", ")} (mean ${fmt(s.meanPassed)}), pass tolerance ${accepted.passTolerance} (spread ${s.maxPassed - s.minPassed})`,
     `  cost ${accepted.costUsd.map(gateCents).join(", ")} (mean ${gateCents(s.meanCostUsd)}), cost margin ${gateCents(accepted.costMarginUsd)} (spread ${gateCents(Math.max(...accepted.costUsd) - Math.min(...accepted.costUsd))})`,
-    `  ${Object.values(accepted.questions).filter((k) => k === accepted.trials).length} questions in the solid set; commit the file on its own`,
+    `  second round: the ${second.questions.length} questions at ${s.trials} of ${s.trials}, up to ${second.runsPerQuestion} more runs each, stopped at the first failure: ${second.runs} runs, ${gateCents(second.costUsd)} (not in rule 3)`,
+    ...left.map((q) => `    left the solid set: ${q.id} (passed ${q.passes} of ${second.runsPerQuestion} before failing)`),
+    `  ${accepted.solid.length} questions in the solid set (${second.questions.length} at ${s.trials} of ${s.trials} in the trials); commit the file on its own`,
   );
+} else if (values.accept && second) {
+  block(`not accepted: ${second.errors} run(s) of the second round threw, so the solid set is undecided; re-run the accept`);
+  verdict = { ...verdict, exit: EXIT.unmeasured, line: "INCOMPLETE: the second round had errors; nothing was accepted" };
 } else if (values.accept) {
   block("not accepted: a run with errors cannot become the baseline; re-run it");
 }

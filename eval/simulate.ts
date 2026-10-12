@@ -1,19 +1,24 @@
 // How often the gate turns red on code that did not change. The model samples, so an agent that
-// changed in nothing can still fail the gate: a question that usually passes can pass all three
-// accept trials, enter the solid set, then fail two trials of the next run (rule 2), and the trial
-// counts and costs wobble around the allowances (rules 1 and 3). This module estimates that
-// false-red rate by Monte Carlo: it draws many pairs of runs of one unchanged agent (an accept run
-// of three trials, then a later run of three trials) and judges each later run with the real
-// `baselineFrom()` and `gate()`, so the simulation cannot drift from the rules CI applies.
+// changed in nothing can still fail the gate: a question that usually passes can pass every accept
+// draw, enter the solid set, then fail two trials of the next run (rule 2), and the trial counts
+// and costs wobble around the allowances (rules 1 and 3). This module estimates that false-red
+// rate by Monte Carlo: it draws many pairs of runs of one unchanged agent (an accept, then a later
+// run of three trials) and judges each later run with the real `baselineFrom()` and `gate()`, so
+// the simulation cannot drift from the rules CI applies.
 //
-// The model of the agent is deliberately plain: each question passes each trial independently
+// The accept is simulated with either entry rule, so the two can be compared on the same agent:
+// two rounds, as `npm run eval -- --accept` runs them (three trials, then up to three more runs of
+// each question that passed them all, stopped at its first failure: solid after six passes), or
+// one round (solid after three), the rule before the second round existed.
+//
+// The model of the agent is deliberately plain: each question passes each run independently
 // with a fixed rate, and each trial's cost is an independent normal draw. The rates are whatever
-// the caller passes: by default the committed baseline's passes out of three, which are three
-// draws per question, so a question at 3 of 3 is modelled as never failing and one at 2 of 3 at
-// 67% whatever its true rate. The figures are therefore a reading of the baseline file, not of
-// the agent, and the script that prints them says so. A seeded generator makes every figure
-// reproducible.
-import { baselineFrom, gate, type Baseline } from "./baseline.js";
+// the caller passes: by default each question's passes out of its draws in the committed baseline,
+// both rounds counted, so a question at 6 of 6 is modelled as never failing and one that passed
+// three then failed at 75%, whatever its true rate. The figures are therefore a reading of the
+// baseline file, not of the agent, and the script that prints them says so. A seeded generator
+// makes every figure reproducible.
+import { baselineFrom, gate, SECOND_ROUND_RUNS, secondRoundEntrants, type Baseline, type SecondRoundScores } from "./baseline.js";
 import { assemble, type EvalRun, type QuestionResult } from "./record.js";
 
 /** The unchanged agent the simulation draws runs from: a pass rate per question and a normal cost per trial. */
@@ -31,6 +36,10 @@ export interface SimulationResult {
   pairs: number;
   seed: number;
   trials: number;
+  /** The accept's entry rule: 2 for six draws (the gate's), 1 for three. */
+  rounds: 1 | 2;
+  /** The solid set's mean size across the simulated accepts. */
+  meanSolid: number;
   /** Later runs red on each rule, and on any rule. */
   rule1: number;
   rule2: number;
@@ -60,9 +69,20 @@ function normal(random: () => number): number {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * random());
 }
 
-/** The agent model the committed baseline implies: each question's passes out of `trials`, and the mean and sample deviation of the trial costs. */
+/**
+ * The agent model the committed baseline implies: each question's passes out of its draws, the
+ * trials and its second-round runs (passes, then the failure that stopped it, if any), and the mean
+ * and sample deviation of the trial costs.
+ */
 export function modelFromBaseline(baseline: Baseline): AgentModel {
-  const passRates = Object.fromEntries(Object.entries(baseline.questions).map(([id, passes]) => [id, passes / baseline.trials]));
+  const second = baseline.secondRound;
+  const rate = (id: string, passes: number) => {
+    const extra = second.passes[id];
+    if (extra === undefined) return passes / baseline.trials;
+    const draws = baseline.trials + extra + (extra < second.runsPerQuestion ? 1 : 0);
+    return (passes + extra) / draws;
+  };
+  const passRates = Object.fromEntries(Object.entries(baseline.questions).map(([id, passes]) => [id, rate(id, passes)]));
   const costs = baseline.costUsd;
   const mean = costs.reduce((a, b) => a + b, 0) / costs.length;
   const variance = costs.length > 1 ? costs.reduce((a, c) => a + (c - mean) ** 2, 0) / (costs.length - 1) : 0;
@@ -91,14 +111,42 @@ function drawRun(model: AgentModel, ids: string[], trials: number, random: () =>
   return { evalId: "simulated", model: "m", effort: "e", promptVersion: "p", codeVersion: "c", startedAt: "", finishedAt: "", durationMs: 0, full: true, ...assemble(perTrial) };
 }
 
-/** Simulates `pairs` accept-then-later runs of one unchanged agent, three trials each, and counts how often the real gate turns red. */
-export function simulateGate(model: AgentModel, { pairs, seed, trials = 3 }: { pairs: number; seed: number; trials?: number }): SimulationResult {
+/**
+ * The second round of a simulated accept. With two rounds, each question that passed every trial
+ * draws up to three more runs, stopped at its first failure; with one, every such question passes
+ * them all, which makes the solid set the questions at every trial, the one-round rule.
+ */
+function drawSecondRound(model: AgentModel, run: EvalRun, rounds: 1 | 2, random: () => number): SecondRoundScores {
+  const passes: Record<string, number> = {};
+  let runs = 0;
+  for (const id of secondRoundEntrants(run)) {
+    let k = 0;
+    if (rounds === 1) k = SECOND_ROUND_RUNS;
+    else {
+      while (k < SECOND_ROUND_RUNS) {
+        runs++;
+        if (random() >= model.passRates[id]!) break;
+        k++;
+      }
+    }
+    passes[id] = k;
+  }
+  return { runsPerQuestion: SECOND_ROUND_RUNS, passes, runs, costUsd: 0 };
+}
+
+/** Simulates `pairs` accept-then-later runs of one unchanged agent, three trials each, the accept by one or two rounds, and counts how often the real gate turns red. */
+export function simulateGate(
+  model: AgentModel,
+  { pairs, seed, trials = 3, rounds = 2 }: { pairs: number; seed: number; trials?: number; rounds?: 1 | 2 },
+): SimulationResult {
   const random = seededRandom(seed);
   const ids = Object.keys(model.passRates);
-  let rule1 = 0, rule2 = 0, rule3 = 0, anyRule = 0, redTwice = 0;
+  let rule1 = 0, rule2 = 0, rule3 = 0, anyRule = 0, redTwice = 0, solid = 0;
   const broke: Record<string, number> = {};
   for (let i = 0; i < pairs; i++) {
-    const baseline = baselineFrom(drawRun(model, ids, trials, random));
+    const accept = drawRun(model, ids, trials, random);
+    const baseline = baselineFrom(accept, drawSecondRound(model, accept, rounds, random));
+    solid += baseline.solid.length;
     const first = gate(drawRun(model, ids, trials, random), baseline, false).comparison!;
     if (!first.average.held) rule1++;
     if (!first.solid.held) rule2++;
@@ -115,6 +163,8 @@ export function simulateGate(model: AgentModel, { pairs, seed, trials = 3 }: { p
     pairs,
     seed,
     trials,
+    rounds,
+    meanSolid: solid / pairs,
     rule1: share(rule1),
     rule2: share(rule2),
     rule3: share(rule3),

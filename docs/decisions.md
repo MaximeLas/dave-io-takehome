@@ -239,19 +239,22 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 
 ### Why three trials against a three-trial baseline, and not one run, or five?
 
-**Choice.** `npm run eval` runs every question three times and holds three rules against a three-trial baseline (`eval/baseline.ts`): on the mean pass count, on every question that passed all three baseline trials (it must pass two of three), and on the mean cost. Each allowance is the spread of the three accept trials, floored at one pass and 5% of the cost.
+**Choice.** `npm run eval` runs every question three times and holds three rules against a three-trial baseline (`eval/baseline.ts`): on the mean pass count, on every question in the solid set (it must pass two of three), and on the mean cost. Each allowance is the spread of the three accept trials, floored at one pass and 5% of the cost. The solid set is earned at accept over six draws: the three trials, then a second round in which each question that passed them all runs up to three more times alone, stopped at its first failure.
 
 **Why not one run.** One run against one stored run needed a wide tolerance: the first baseline (commit `2520733`) failed below 22 while the agent usually scored 25, letting three working questions go, and cost went ungated.
 
-**Why not five.** About 45 cents per pull request instead of 27, for a standard error about 1.3 times smaller. What remains is a question entering the solid set by three lucky passes (42% for one that passes 75% of the time), which a second accept round fixes more cheaply ([item 4 of the next steps](../SOLUTION.md#how-i-would-take-this-further)).
+**Why not five.** About 45 cents per pull request instead of 27, for a standard error about 1.3 times smaller. What remained after three trials was a question entering the solid set by three lucky passes (42% for one that passes 75% of the time), and a second accept round fixes that more cheaply: it is paid once per accept, not on every pull request.
 
 **Rejected.**
 
 - A cost rule that relaxes when the score rises: it needs an exchange rate between cents and questions.
+- Five trials at one accept for the solid set: 24% entry by luck for a question at 75% (0.75⁵), against 18% for the second round, which also costs nothing extra for a question that fails early.
 
-**Evidence.** Baseline (commit `268529c`, prompt `1d555744`): 25, 26, 26 passes, tolerance 1; 8.9 cents a trial, margin 0.73 cents. Unchanged code turns red about one run in nine, and red again on one re-run about one in thirty ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-thirty), `npm run simulate-gate`).
+**Evidence.** Baseline (commit `268529c`, prompt `1d555744`), under the first entry rule: 25, 26, 26 passes, tolerance 1; 8.9 cents a trial, margin 0.73 cents. Unchanged code turned red about one run in nine, and red again on one re-run about one in thirty ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-thirty), `npm run simulate-gate`).
 
 **Revised.** The first estimate said one in a hundred after a re-run: it treated the re-run as independent, when both runs face the same solid set.
+
+**Revised.** The first version of rule 2 held every question that passed the three accept trials. Three draws proved too cheap an entry: on 13 Oct a pull request that changed only documentation, so the agent was identical to `main`'s, went red under rule 2 twice before merging, each time on a different solid question. In [CI run 38314893054](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38314893054) "Which instances would a deploy to the auto scaling group hit?" passed 1 of 3; in [run 38319345402](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38319345402) "Do any GitHub workflows deploy directly to a database?" passed 1 of 3, two of its trials listing the eight deploy workflows they had checked as the answer to a question whose answer is none. Each re-run went green (the second at 25, 25, 26). The solid set is now earned over six draws, which cuts a lucky entry for a question at 75% from 42% to 18%. Six draws reduce lucky entries without ending them: a question at 85% still enters about four times in ten (0.85⁶ ≈ 0.38). The direct fix for the padding on empty-answer questions is a change to the agent, for the improvement loop, not to the gate.
 
 **What would change it.** Reds on unchanged code well above that rate, or the paired per-question comparison of the next steps.
 
