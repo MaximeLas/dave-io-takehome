@@ -3,10 +3,11 @@
 // question, and an empty answer must fail every question, the two with an empty expected
 // set included. If either breaks, every eval score after it is meaningless.
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { loadQuestions } from "./questions.js";
-import { diagnostics, loadAnswerKey, scoreAnswer } from "./score.js";
+import { applyOverlay, diagnostics, loadAnswerKey, loadKeyOverlay, scoreAnswer } from "./score.js";
 import type { RunRecord } from "../src/agent/record.js";
 
 const key = await loadAnswerKey();
@@ -88,6 +89,37 @@ test("a wrong member fails, with recall and precision saying which way", () => {
   assert.ok(!short.pass);
   assert.equal(short.recall, 0.5);
   assert.equal(short.precision, 1);
+});
+
+test("an empty overlay leaves the key as it is", () => {
+  assert.deepEqual(applyOverlay(key, {}), key);
+});
+
+test("an overlay entry replaces that question's expected ids and nothing else", () => {
+  const ids = ["aws:sqs:queue-commerce-prod-1"];
+  const amended = applyOverlay(key, { "dlq-for-prod-2": { expected_resource_ids: ids, reason: "a test", audit: "eval/key-audit.md#dlq-for-prod-2" } });
+  assert.deepEqual(amended["dlq-for-prod-2"], ids);
+  for (const id of Object.keys(key).filter((id) => id !== "dlq-for-prod-2")) assert.deepEqual(amended[id], key[id], id);
+  assert.notDeepEqual(key["dlq-for-prod-2"], ids, "the key itself is not changed");
+  assert.throws(() => applyOverlay(key, { "no-such-question": { expected_resource_ids: [], reason: "", audit: "" } }), /no-such-question/);
+});
+
+test("the committed overlay: an absent file reads as empty, and each entry names a question, a reason and its audit entry", async () => {
+  assert.deepEqual(await loadKeyOverlay(new URL("./no-such-overlay.json", import.meta.url)), {});
+  const overlay = await loadKeyOverlay();
+  const audit = await readFile(new URL("./key-audit.md", import.meta.url), "utf8");
+  for (const [id, entry] of Object.entries(overlay)) {
+    assert.ok(id in key, id);
+    assert.ok(entry.reason.length > 0, `${id} has a reason`);
+    assert.equal(entry.audit, `eval/key-audit.md#${id}`);
+    // Its entry in the audit, up to the next entry, ends in a verdict that does not agree with the key.
+    const section = audit.split(/^### /m).find((s) => s.startsWith(`\`${id}\``));
+    assert.ok(section, `${id} has an entry in the audit`);
+    assert.match(section, /\*\*Verdict: (disagrees|ambiguous)/, `${id}'s audit verdict`);
+  }
+  // The amended key scored against itself passes every question, as the key does.
+  const amended = applyOverlay(key, overlay);
+  for (const q of questions) assert.ok(scoreAnswer({ answer: "x", ids: amended[q.id]! }, amended[q.id]!, q.text).pass, q.id);
 });
 
 test("diagnostics count Cypher errors and cut results off the record", () => {

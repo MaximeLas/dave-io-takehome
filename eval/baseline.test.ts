@@ -7,7 +7,10 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { BASELINES_DIR, baselineFrom, compare, EXIT, gate, loadBaseline, MIN_PASS_TOLERANCE, type Baseline } from "./baseline.js";
-import { assemble, totals, type EvalRun, type QuestionResult } from "./record.js";
+import type { RunRecord } from "../src/agent/record.js";
+import { loadQuestions } from "./questions.js";
+import { assemble, scoreRun, totals, type EvalRun, type QuestionResult } from "./record.js";
+import { applyOverlay, loadAnswerKey, loadKeyOverlay, type KeyOverlay } from "./score.js";
 
 const result = (id: string, status: QuestionResult["status"], costUsd = 0.01, empty = false): QuestionResult => ({
   id,
@@ -165,6 +168,41 @@ test("the trials add up: each question's pass count, and the mean, min and max o
   assert.deepEqual(r.questions[0]!.results.map((x) => x.status), ["pass", "pass", "fail"]);
   assert.deepEqual(r.summary, { trials: 3, meanPassed: 5 / 3, minPassed: 1, maxPassed: 2, errors: 0, meanCostUsd: 0.06, costUsd: 0.18 });
   assert.throws(() => assemble([[result("a", "pass")], [result("b", "pass")]]), /disagree/);
+});
+
+test("the gate's verdict is the same with and without the key overlay file", async () => {
+  const key = await loadAnswerKey();
+  const questions = await loadQuestions();
+  const withFile = await loadKeyOverlay();
+  const withoutFile = await loadKeyOverlay(new URL("./no-such-overlay.json", import.meta.url));
+  assert.ok(Object.keys(withFile).length > 0, "the committed overlay amends at least one question");
+  const amendedKey = applyOverlay(key, withFile);
+  // Every question answered with the amended set in trials 1 and 2 and the key's set in trial 3,
+  // so each amended question fails the key twice and the amended key once.
+  const record = (ids: string[], q: string) =>
+    ({ runId: `run-${q}`, questionId: q, answer: "x", ids, durationMs: 1000, costUsd: 0.003, stopReasons: ["tool_use"], toolCalls: [] }) as unknown as RunRecord;
+  const runWith = (overlay: KeyOverlay): EvalRun => {
+    const amended = applyOverlay(key, overlay);
+    const trials = [0, 1, 2].map((t) =>
+      questions.map((q) => scoreRun(record(t < 2 ? amendedKey[q.id]! : key[q.id]!, q.id), q, key[q.id]!, q.id in overlay ? amended[q.id] : undefined)),
+    );
+    return { evalId: "e", model: "m", effort: "high", promptVersion: "p", codeVersion: "c", startedAt: "", finishedAt: "", durationMs: 0, full: true, ...assemble(trials) };
+  };
+  const present = runWith(withFile);
+  const absent = runWith(withoutFile);
+  const reference = baselineFrom(absent);
+
+  // The overlay moves the amended score, so the comparison below is not vacuous...
+  const amendedId = Object.keys(withFile)[0]!;
+  const passesOf = (r: EvalRun) => r.questions.find((q) => q.id === amendedId)!;
+  assert.deepEqual([passesOf(present).passes, passesOf(present).amendedPasses], [1, 2]);
+  assert.deepEqual([passesOf(absent).passes, passesOf(absent).amendedPasses], [1, 1]);
+  // ...and nothing the gate reads: the verdict against a baseline, and a baseline taken from the run.
+  assert.deepEqual(gate(present, reference, false), gate(absent, reference, false));
+  assert.deepEqual(gate(present, reference, true), gate(absent, reference, true));
+  const { acceptedAt: _a, trialTotals: _ta, ...fromPresent } = baselineFrom(present);
+  const { acceptedAt: _b, trialTotals: _tb, ...fromAbsent } = baselineFrom(absent);
+  assert.deepEqual(fromPresent, fromAbsent);
 });
 
 test("totals: errors stay out of the sums, empty answers stay out of the means", () => {

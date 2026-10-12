@@ -1,5 +1,6 @@
 // Runs the eval: every question (or a subset) through `runAgent`, the one entry point the
-// server also calls, n times (the trials), scored against the key, into one eval record. No
+// server also calls, n times (the trials), scored against the key (and, for the questions
+// eval/key-overlay.json amends, against the amended key as well), into one eval record. No
 // printing here; the script in scripts/eval.ts does that, so the harness can run from CI or a test.
 //
 // The trials share one pool of workers, five per trial. Each run waits on the model, not on this
@@ -19,8 +20,8 @@ import { saveRun } from "../src/agent/record.js";
 import { codeVersion, runAgent } from "../src/agent/run.js";
 import { assertGraphReady } from "../src/graph/health.js";
 import { loadQuestions, type Question } from "./questions.js";
-import { assemble, type EvalRun, type QuestionResult } from "./record.js";
-import { diagnostics, loadAnswerKey, scoreAnswer } from "./score.js";
+import { assemble, scoreRun, type EvalRun, type QuestionResult } from "./record.js";
+import { applyOverlay, loadAnswerKey, loadKeyOverlay } from "./score.js";
 
 /** What one eval run varies; anything left out takes the shipped default. */
 export interface EvalOptions {
@@ -45,6 +46,9 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   const trials = options.trials ?? 1;
   if (!Number.isInteger(trials) || trials < 1) throw new Error(`The number of trials must be a whole number of at least 1, not ${trials}.`);
   const key = await loadAnswerKey();
+  const overlay = await loadKeyOverlay();
+  // Only the questions the overlay names get an amended score; checks the overlay against the key before any token is spent.
+  const amended = applyOverlay(key, overlay);
   const all = await loadQuestions();
   const questions = options.only ? all.filter((q) => options.only!.includes(q.id)) : all;
   const unknown = (options.only ?? []).filter((id) => !all.some((q) => q.id === id));
@@ -56,7 +60,7 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   const queue = Array.from({ length: trials }, (_, t) => questions.map((q, i) => ({ t, i, q }))).flat();
   const worker = async () => {
     for (let job = queue.shift(); job; job = queue.shift()) {
-      const result = await runOne(job.q, key[job.q.id] ?? [], model, effort);
+      const result = await runOne(job.q, key[job.q.id] ?? [], job.q.id in overlay ? amended[job.q.id] : undefined, model, effort);
       results[job.t]![job.i] = result;
       options.onQuestion?.(result, job.t + 1);
     }
@@ -78,22 +82,14 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   };
 }
 
-async function runOne(question: Question, expectedIds: string[], model: ModelId, effort: Effort): Promise<QuestionResult> {
+async function runOne(question: Question, expectedIds: string[], amendedIds: string[] | undefined, model: ModelId, effort: Effort): Promise<QuestionResult> {
   try {
     const record = await runAgent(
       { question: question.text, questionId: question.id },
       { model, effort, signal: AbortSignal.timeout(QUESTION_TIMEOUT_MS) },
     );
     await saveRun(record);
-    const score = scoreAnswer(record, expectedIds, question.text);
-    return {
-      id: question.id,
-      status: score.pass ? "pass" : "fail",
-      runId: record.runId,
-      score,
-      diagnostics: diagnostics(record),
-      error: null,
-    };
+    return scoreRun(record, question, expectedIds, amendedIds);
   } catch (error) {
     return { id: question.id, status: "error", runId: null, score: null, diagnostics: null, error: describe(error) };
   }

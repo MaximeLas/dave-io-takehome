@@ -7,6 +7,10 @@
 // question of the ten that name a resource (path-compute-to-s3 keeps its starting instance,
 // dlq-for-prod-2 leaves out queue-commerce-prod-2), so they count neither way. Recall and precision are reported beside
 // the pass so progress on a large set shows as a number while the question still fails.
+//
+// The key is the reviewers' reference and is never edited. Where eval/key-audit.md finds it wrong,
+// eval/key-overlay.json holds the amended set; applyOverlay gives the amended key, and the eval
+// reports a second pass count against it. The gate reads the key alone.
 import { readFile } from "node:fs/promises";
 
 import type { RunRecord } from "../src/agent/record.js";
@@ -22,6 +26,28 @@ export async function loadAnswerKey(): Promise<AnswerKey> {
     evals: Record<string, { expected_resource_ids: string[] }>;
   };
   return Object.fromEntries(Object.entries(parsed.evals).map(([id, entry]) => [id, entry.expected_resource_ids]));
+}
+
+/** Amendments to the key, per question id: the amended expected ids, why, and the audit entry that argues it. */
+export type KeyOverlay = Record<string, { expected_resource_ids: string[]; reason: string; audit: string }>;
+
+const OVERLAY_FILE = new URL("./key-overlay.json", import.meta.url);
+
+/** Loads the key's overlay; an absent file is an empty overlay, so the eval runs the same without one. */
+export async function loadKeyOverlay(file: URL | string = OVERLAY_FILE): Promise<KeyOverlay> {
+  try {
+    return JSON.parse(await readFile(file, "utf8")) as KeyOverlay;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+/** The key with each question the overlay names replaced by its amended ids; every other question is the key's own. */
+export function applyOverlay(key: AnswerKey, overlay: KeyOverlay): AnswerKey {
+  const unknown = Object.keys(overlay).filter((id) => !(id in key));
+  if (unknown.length > 0) throw new Error(`The key overlay amends question(s) the key does not have: ${unknown.join(", ")}`);
+  return { ...key, ...Object.fromEntries(Object.entries(overlay).map(([id, entry]) => [id, entry.expected_resource_ids])) };
 }
 
 /** What the grader says about one answer. */

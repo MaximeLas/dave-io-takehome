@@ -10,7 +10,7 @@ The evidence is the query, not the agent that wrote it. Every query returns one 
 - **Disagrees:** the key's set is reproduced by a query whose reading is named, and the audit argues why a different reading is the right one for the question as asked.
 - **Ambiguous:** the wording supports two readings, both queries are shown, and the entry says which one the key took.
 
-The amendments live in [`eval/key-overlay.json`](key-overlay.json): every **disagrees** entry, and an **ambiguous** one only where the audit finds the key's reading the weaker (none is). The key file is never edited.
+The amendments live in [`eval/key-overlay.json`](key-overlay.json): every **disagrees** entry, and an **ambiguous** one only where the audit finds the key's reading the weaker (none is). The key file is never edited. `npm run eval` prints each amended question's passes against the key and against the amended key, and both totals; the gate reads the key alone (`AGENTS.md` § Scoring).
 
 **Result: 28 agree, 1 disagrees, 1 is ambiguous.**
 
