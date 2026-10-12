@@ -3,10 +3,16 @@
 // eval run under `runs/eval/` (gitignored, like the agent records it points to by run id), so
 // a score can always be traced back to the traces behind it. The n trials of one invocation
 // share one record, so a CI run has one report, one summary page and one artifact.
+//
+// Every status and pass count here is against the key, and the gate reads only those. The pass
+// against the key as amended by eval/key-overlay.json rides beside them in fields of its own,
+// so the second score is reported without any path into the gate.
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { Diagnostics, Score } from "./score.js";
+import type { RunRecord } from "../src/agent/record.js";
+import type { Question } from "./questions.js";
+import { diagnostics, scoreAnswer, type Diagnostics, type Score } from "./score.js";
 
 /** A cost in US dollars printed in cents, the one unit every command prints; two digits where a gate compares two costs. */
 export const cents = (usd: number, digits = 1): string => `${(usd * 100).toFixed(digits)}c`;
@@ -14,26 +20,50 @@ export const cents = (usd: number, digits = 1): string => `${(usd * 100).toFixed
 /** One question in one trial. `error` means the run never produced an answer to score (it threw or timed out). */
 export interface QuestionResult {
   id: string;
+  /** Against the key; the gate reads this. */
   status: "pass" | "fail" | "error";
   /** The agent record under runs/, null when the run threw. */
   runId: string | null;
   score: Score | null;
   diagnostics: Diagnostics | null;
   error: string | null;
+  /** The pass against the amended key; absent when the overlay leaves the question alone or the run threw. */
+  amendedPass?: boolean;
 }
 
 /** One question across the trials: how many passed, and each trial's result in trial order. */
 export interface QuestionTrials {
   id: string;
-  /** The trials that passed, out of `results.length`. */
+  /** The trials that passed against the key, out of `results.length`. */
   passes: number;
+  /** The trials that passed against the amended key; equal to `passes` when the overlay leaves the question alone. */
+  amendedPasses: number;
   results: QuestionResult[];
 }
+
+/** Scores one agent run: its status against the key, and its pass against the amended ids when the overlay amends the question. */
+export function scoreRun(record: RunRecord, question: Question, expectedIds: string[], amendedIds?: string[]): QuestionResult {
+  const score = scoreAnswer(record, expectedIds, question.text);
+  return {
+    id: question.id,
+    status: score.pass ? "pass" : "fail",
+    runId: record.runId,
+    score,
+    diagnostics: diagnostics(record),
+    error: null,
+    ...(amendedIds ? { amendedPass: scoreAnswer(record, amendedIds, question.text).pass } : {}),
+  };
+}
+
+/** Whether a result passes against the amended key: its own amended pass, or its status when the overlay leaves it alone. */
+const passesAmended = (r: QuestionResult) => r.amendedPass ?? r.status === "pass";
 
 /** Counts over all questions of one trial; sums over those that produced an answer; means over the non-empty answers. */
 export interface EvalTotals {
   questions: number;
   passed: number;
+  /** Passed against the amended key: reported beside `passed`, never gated. */
+  passedAmended: number;
   failed: number;
   errors: number;
   /** Answers with no usable final_answer call; a prompt-compliance count, kept out of the means. */
@@ -122,6 +152,7 @@ export function totals(questions: QuestionResult[]): EvalTotals {
   return {
     questions: questions.length,
     passed: questions.filter((q) => q.status === "pass").length,
+    passedAmended: questions.filter(passesAmended).length,
     failed: questions.filter((q) => q.status === "fail").length,
     errors: questions.filter((q) => q.status === "error").length,
     empty: answered.length - nonEmpty.length,
@@ -140,7 +171,7 @@ export function assemble(trials: QuestionResult[][]): Pick<EvalRun, "questions" 
   const questions = trials[0]!.map((first, i) => {
     const results = trials.map((trial) => trial[i]!);
     if (results.some((r) => r.id !== first.id)) throw new Error(`Trials disagree on question ${i}: ${results.map((r) => r.id).join(", ")}`);
-    return { id: first.id, passes: results.filter((r) => r.status === "pass").length, results };
+    return { id: first.id, passes: results.filter((r) => r.status === "pass").length, amendedPasses: results.filter(passesAmended).length, results };
   });
   const trialTotals = trials.map(totals);
   const passed = trialTotals.map((t) => t.passed);

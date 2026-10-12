@@ -27,6 +27,8 @@ npm run eval: runs the thirty eval questions through the agent, scores each agai
 and judges the run. By default every question runs ${BASELINE_TRIALS} times (${BASELINE_TRIALS} trials, about 27 cents) and
 the run ends with the gate's verdict against the committed baseline in eval/baselines/: the
 same check CI runs. A run on another number of trials, or with --only, is reported, not compared.
+Where eval/key-overlay.json amends the key (the audit in eval/key-audit.md), the report also
+prints the passes against the amended key; the gate reads the key alone.
 
 Options:
   --trials <n>       runs per question (default: ${BASELINE_TRIALS}, what the gate compares)
@@ -101,16 +103,21 @@ if (!values.only) {
 }
 
 // What the table's columns mean, one definition per line, printed once above it.
-const legend = (compared: boolean) => [
+const legend = (compared: boolean, amended: boolean) => [
   field("passed", `passes out of trials; a trial is one run of every question, and the gate runs ${BASELINE_TRIALS}`),
   ...(compared ? [field(`(n/${BASELINE_TRIALS})`, "beside passed: the same question's passes in the baseline")] : []),
+  ...(amended ? [field("[n/t]", "beside passed: passes against the key as eval/key-overlay.json amends it (eval/key-audit.md); not gated")] : []),
   field("exp", "ids the answer key expects"),
   field("the rest", "means per answered run: recall, precision, time, cost, tool calls"),
   field("err, cut", "beside the tool calls, only when nonzero: Cypher errors, results cut short"),
 ];
 const ID_WIDTH = Math.max(...questions.map((q) => q.id.length));
+// A question the overlay amends carries an amended pass in every trial that produced an answer.
+const isAmended = (q: QuestionTrials) => q.results.some((r) => r.amendedPass !== undefined);
 const passedText = (q: QuestionTrials, baselinePasses: number | undefined) =>
-  `${q.passes}/${q.results.length}` + (baselinePasses === undefined ? "" : ` (${baselinePasses}/${q.results.length})`);
+  `${q.passes}/${q.results.length}` +
+  (baselinePasses === undefined ? "" : ` (${baselinePasses}/${q.results.length})`) +
+  (isAmended(q) ? ` [${q.amendedPasses}/${q.results.length}]` : "");
 
 // The table's header row, its columns aligned with row()'s.
 function header(passedWidth: number): string {
@@ -224,12 +231,16 @@ const flipped = new Set(c?.flips.map((f) => f.id));
 const ordered = [...(c?.flips.map((f) => record.questions.find((q) => q.id === f.id)!) ?? []), ...record.questions.filter((q) => !flipped.has(q.id))];
 const baselinePasses = (q: QuestionTrials) => (c ? baseline!.questions[q.id] : undefined);
 const passedWidth = Math.max("passed".length, ...ordered.map((q) => passedText(q, baselinePasses(q)).length));
-block(...legend(c !== null), "", header(passedWidth), ...ordered.flatMap((q) => row(q, baselinePasses(q), passedWidth)));
+const amendedCount = record.questions.filter(isAmended).length;
+block(...legend(c !== null, amendedCount > 0), "", header(passedWidth), ...ordered.flatMap((q) => row(q, baselinePasses(q), passedWidth)));
 
 const per = (pick: (t: EvalTotals) => number, f: (n: number) => string = String) => record.trialTotals.map((t) => f(pick(t))).join(", ");
 const several = s.trials > 1;
 block(
   field("passed", `${per((t) => t.passed)} of ${record.questions.length}` + (several ? ` (mean ${fmt(s.meanPassed)}, min ${s.minPassed}, max ${s.maxPassed})` : "")),
+  ...(amendedCount > 0
+    ? [field("amended", `${per((t) => t.passedAmended)} of ${record.questions.length} against the key with ${amendedCount} question${amendedCount === 1 ? "" : "s"} amended by eval/key-overlay.json; the gate reads the key`)]
+    : []),
   ...(s.errors ? [field("errors", `${s.errors} question run(s) threw; see the ERROR lines`)] : []),
   field("cost", per((t) => t.costUsd, cents) + (several ? ` (mean ${cents(s.meanCostUsd)} per trial, ${cents(s.costUsd)} in all)` : "")),
   field("recall", record.trialTotals.map((t) => pct(t.meanRecall)).join(", ")),

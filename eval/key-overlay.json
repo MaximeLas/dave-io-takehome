@@ -1,0 +1,14 @@
+{
+  "order-flow-instances-actual-access": {
+    "expected_resource_ids": [
+      "aws:rds:rds-commerce-dev-3",
+      "aws:rds:rds-commerce-prod-3",
+      "aws:rds:rds-commerce-prod-7",
+      "aws:s3:bucket-commerce-dev-3",
+      "aws:s3:bucket-commerce-prod-3",
+      "aws:s3:bucket-commerce-prod-7"
+    ],
+    "reason": "The key counts queues as data and covers production only here, against its own reading of data in unmonitored-prod-data and of an unnamed environment in the other area questions; the amended set reads both as the key does elsewhere.",
+    "audit": "eval/key-audit.md#order-flow-instances-actual-access"
+  }
+}
