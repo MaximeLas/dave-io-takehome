@@ -62,7 +62,7 @@ LangChain's `langchain-skills` pack was reviewed on 2026-10-08 and trails our pi
 
 ## Scoring
 
-- A question passes when the ids the answer asserts equal the expected ids exactly; the ids the question itself names count neither way, because the key is inconsistent about them. An empty answer (no `final_answer` call) never passes, even when the expected set is empty: no answer is not an answer of "none".
+- A question passes when the ids the answer asserts equal the expected ids exactly; the ids the question itself names count neither way, because the key includes them in one question of the ten that name a resource (`docs/facts.md`). An empty answer (no `final_answer` call) never passes, even when the expected set is empty: no answer is not an answer of "none".
 - The gate is the pass count against the baseline, minus a tolerance agreed from the measured run-to-run spread (the model samples, so the count moves with nothing changed). The spread is measured by running the full eval three times on the same commit; the tolerance is at least the highest count minus the lowest, and the three counts go in the commit message that accepts the baseline. Everything else is measured and reported, not gated: recall and precision per question, empty answers, tool calls, Cypher errors, cut results, cost, duration, and how each moved against the baseline. A reported metric becomes a gate once it is steady across runs and has an agreed budget.
 - A question whose run threw or timed out is an error, not a failure: it says nothing about the agent, and a run with errors is incomplete. The build fails on it, with that reason. The graph is checked before the first question for the same reason: the query tool returns a database outage to the model as text, which would otherwise read as thirty wrong answers.
 - The baseline moves only on purpose, and in this order: commit the change, run `--accept` on that commit (it refuses a dirty tree), commit the baseline file on its own with the scores in the message. The eval's history is the git history of `eval/baselines/`.
@@ -94,4 +94,4 @@ The approach follows Anthropic's [Building effective agents](https://www.anthrop
 
 ## Keeping these docs true
 
-A change that makes a line in this file wrong updates it in the same commit. `docs/facts.md` has its own rule: re-verify its entries when a pinned version changes.
+A change that makes a line in this file wrong updates it in the same commit. `docs/facts.md` holds what is verified about the libraries, the graph, the questions and the answer key, each entry with evidence a reader can re-run and the date it was checked; re-verify an entry when its pinned version changes, and correct or remove one that no longer holds, the file's git history being the record. An experiment in `eval/experiments/` never changes its measured numbers; when later evidence overturns its reading of them, it gets one dated `Revised <date>:` line at the top.

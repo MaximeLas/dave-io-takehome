@@ -3,9 +3,9 @@
 // (score.test.ts feeds it the key itself, which must pass, and an empty answer, which must fail).
 //
 // A question passes when the set of ids the answer asserts equals the expected set, after
-// removing from both sides the ids the question itself names: the key is inconsistent about
-// those (dlq-for-prod-2 leaves out queue-commerce-prod-2, path-compute-to-s3 includes the
-// starting instance), so they count neither way. Recall and precision are reported beside
+// removing from both sides the ids the question itself names: the key includes them in one
+// question of the ten that name a resource (path-compute-to-s3 keeps its starting instance,
+// dlq-for-prod-2 leaves out queue-commerce-prod-2), so they count neither way. Recall and precision are reported beside
 // the pass so progress on a large set shows as a number while the question still fails.
 import { readFile } from "node:fs/promises";
 
