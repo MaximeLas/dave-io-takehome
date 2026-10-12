@@ -277,6 +277,8 @@
     row("Tokens out", u.outputTokens.toLocaleString("en"));
     row("Cost", money(record.costUsd));
     row("Prompt version", code(record.promptVersion));
+    // Records written before the agent version existed lack it.
+    if (record.agentVersion) row("Agent version", code(record.agentVersion));
     row("Code version", code(record.codeVersion));
     row("Run id", code(record.runId));
     page.push(totals);
