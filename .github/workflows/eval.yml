@@ -1,10 +1,12 @@
 # The regression gate: every pull request and every push to main runs the thirty eval
-# questions through the agent as it ships and fails when the pass count drops below the
-# committed baseline (eval/baselines/). The eval's exit code is the verdict; only 0 is green.
+# questions three times through the agent as it ships, and fails when the mean pass count,
+# a question that passed every baseline trial, or the mean cost falls on the wrong side of the
+# committed baseline (eval/baselines/; the rules are in eval/baseline.ts). The eval's exit code
+# is the verdict; only 0 is green.
 #
-# Each run spends real model tokens: about 10 cents and three minutes on Haiku 5.5 at effort
-# high, the shipped configuration. A newer push to a pull request cancels the run it
-# supersedes; on main every commit keeps its verdict.
+# Each run spends real model tokens: about 27 cents on Haiku 5.5 at effort high, the shipped
+# configuration, three trials of about 9 cents run side by side. A newer push to a pull request
+# cancels the run it supersedes; on main every commit keeps its verdict.
 name: eval
 
 on:
