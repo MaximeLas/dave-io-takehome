@@ -1,0 +1,466 @@
+{
+  "about": "Search phrases for measuring retrieval over node descriptions, labelled against the 79 distinct descriptions in the seeded graph. Written and labelled by a reviewer who never saw eval/QUESTIONS.md or the answer key. relevant: a searcher wants it; partial: defensible either way, ignored by the metrics.",
+  "phrases": [
+    {
+      "query": "product catalog",
+      "intent": "Find the resources that serve or store product information for the shop.",
+      "style": "area",
+      "relevant": [
+        "D07",
+        "D09",
+        "D37",
+        "D46",
+        "D56",
+        "D76"
+      ],
+      "partial": [
+        "D34",
+        "D54"
+      ],
+      "note": "Dev counterparts count as relevant when the phrase names no environment. D34 and D54 are 'product or order' / 'order or catalog' mixes, so partial."
+    },
+    {
+      "query": "checkout and orders",
+      "intent": "Find the resources behind placing and tracking customer orders.",
+      "style": "area",
+      "relevant": [
+        "D06",
+        "D11",
+        "D36",
+        "D45",
+        "D58",
+        "D71",
+        "D75"
+      ],
+      "partial": [
+        "D34",
+        "D54"
+      ],
+      "note": "D34 and D54 mix order with product/catalog, so partial."
+    },
+    {
+      "query": "fulfillment",
+      "intent": "Find the resources doing fulfillment work (picking, packing, shipping orders).",
+      "style": "area",
+      "relevant": [
+        "D05",
+        "D08",
+        "D33",
+        "D35",
+        "D57",
+        "D74"
+      ],
+      "partial": [
+        "D55",
+        "D72"
+      ],
+      "note": "D18 contains the word 'fulfillment' only as one of three possibilities for a generic DB-access policy; not relevant, and a keyword trap. D55 (worker-style queue) and D72 (worker lag monitor) are worker-adjacent, partial."
+    },
+    {
+      "query": "shipping and delivery",
+      "intent": "Same need as 'fulfillment', phrased the way a non-specialist would say it.",
+      "style": "paraphrase",
+      "relevant": [
+        "D05",
+        "D08",
+        "D33",
+        "D35",
+        "D57",
+        "D74"
+      ],
+      "partial": [
+        "D55",
+        "D72"
+      ],
+      "note": "Deliberately the same labels as 'fulfillment'; only D08 shares a word ('shipment'). Comparing the two shows how much a method depends on word overlap."
+    },
+    {
+      "query": "customer-facing storefront",
+      "intent": "Find what serves the public shop website to shoppers.",
+      "style": "area",
+      "relevant": [
+        "D04",
+        "D10",
+        "D28",
+        "D29",
+        "D77"
+      ],
+      "partial": [
+        "D23",
+        "D46",
+        "D69"
+      ],
+      "note": "D04 and D28 are dev rehearsals of the web entry path; counted relevant because no environment is named. D24 is excluded: it says it is not the main customer path."
+    },
+    {
+      "query": "payment processing",
+      "intent": "Find where payments are handled or payment data lives.",
+      "style": "area",
+      "relevant": [
+        "D36"
+      ],
+      "partial": [
+        "D06",
+        "D11",
+        "D58"
+      ],
+      "note": "Only D36 mentions payment. Purchase/checkout/invoice resources are partial; order-flow-only resources (D71, D75, D45) excluded."
+    },
+    {
+      "query": "stock levels",
+      "intent": "Find where inventory and stock counts are stored or refreshed.",
+      "style": "paraphrase",
+      "relevant": [
+        "D37",
+        "D56"
+      ],
+      "partial": [
+        "D07",
+        "D09",
+        "D34",
+        "D76"
+      ],
+      "note": "Product-information resources are partial (inventory is next to catalog, not the same). D46 (product objects/media) excluded."
+    },
+    {
+      "query": "message queues",
+      "intent": "Find the queues used for asynchronous work.",
+      "style": "role",
+      "relevant": [
+        "D54",
+        "D55",
+        "D56",
+        "D57",
+        "D58",
+        "D59"
+      ],
+      "partial": [
+        "D17",
+        "D20",
+        "D72"
+      ],
+      "note": "Queue access policies and the queue-depth monitor are about queues but are not queues: partial."
+    },
+    {
+      "query": "retry failed messages",
+      "intent": "Find dead-letter queues and failure handling for async work.",
+      "style": "paraphrase",
+      "relevant": [
+        "D55",
+        "D59"
+      ],
+      "partial": [
+        "D17",
+        "D54"
+      ],
+      "note": "Avoids the descriptions' term 'dead-letter'. D17 and D54 mention 'replay', which is close to retrying, so partial."
+    },
+    {
+      "query": "SQL databases",
+      "intent": "Find the relational database instances.",
+      "style": "paraphrase",
+      "relevant": [
+        "D33",
+        "D34",
+        "D35",
+        "D36",
+        "D37"
+      ],
+      "partial": [
+        "D02",
+        "D03",
+        "D38",
+        "D39",
+        "D40",
+        "D41"
+      ],
+      "note": "The descriptions say 'PostgreSQL', never 'SQL database'. Subnet, option and parameter groups are database plumbing, partial. DB-access policies (D15, D18) and the DB monitor (D70) excluded."
+    },
+    {
+      "query": "file and object storage",
+      "intent": "Find the buckets that hold files and objects.",
+      "style": "role",
+      "relevant": [
+        "D44",
+        "D45",
+        "D46",
+        "D47"
+      ],
+      "partial": [
+        "D16",
+        "D19",
+        "D48",
+        "D49"
+      ],
+      "note": "Bucket policies and object-storage access policies are partial: about storage, not storage."
+    },
+    {
+      "query": "monitoring and alerting",
+      "intent": "Find the dashboards and monitors that watch the estate.",
+      "style": "role",
+      "relevant": [
+        "D66",
+        "D67",
+        "D68",
+        "D69",
+        "D70",
+        "D71",
+        "D72"
+      ],
+      "partial": []
+    },
+    {
+      "query": "slow page load alerts",
+      "intent": "Find the alert that would fire when shoppers see a slow site.",
+      "style": "paraphrase",
+      "relevant": [
+        "D69"
+      ],
+      "partial": [
+        "D68"
+      ],
+      "note": "D68 watches latency too but in dev, so partial. Dashboards excluded: not alerts."
+    },
+    {
+      "query": "deployment pipeline",
+      "intent": "Find the CI/CD workflows that ship code to servers.",
+      "style": "role",
+      "relevant": [
+        "D78",
+        "D79"
+      ],
+      "partial": [
+        "D73",
+        "D74",
+        "D75",
+        "D76",
+        "D77"
+      ],
+      "note": "Repositories feed the pipeline, so partial. D01 ('deployment shape'), D27 and D63 ('deployment boundaries') use the word but are not pipelines: excluded, a keyword trap."
+    },
+    {
+      "query": "permissions and roles",
+      "intent": "Find the IAM identities and policies that decide who may access what.",
+      "style": "role",
+      "relevant": [
+        "D13",
+        "D14",
+        "D15",
+        "D16",
+        "D17",
+        "D18",
+        "D19",
+        "D20",
+        "D21",
+        "D22",
+        "D48",
+        "D49"
+      ],
+      "partial": [
+        "D50",
+        "D51",
+        "D52",
+        "D53"
+      ],
+      "note": "Security groups and rules control network access, not identity permissions: partial."
+    },
+    {
+      "query": "firewall rules",
+      "intent": "Find the network rules that allow or block traffic.",
+      "style": "paraphrase",
+      "relevant": [
+        "D31",
+        "D32",
+        "D50",
+        "D51",
+        "D52",
+        "D53"
+      ],
+      "partial": [],
+      "note": "No description says 'firewall'; security groups, their rules and network ACLs are AWS's firewalls."
+    },
+    {
+      "query": "outbound internet from private servers",
+      "intent": "Find how private backend hosts reach the internet (NAT egress).",
+      "style": "paraphrase",
+      "relevant": [
+        "D12",
+        "D30"
+      ],
+      "partial": [
+        "D23",
+        "D24",
+        "D43",
+        "D60"
+      ],
+      "note": "Internet gateways, route tables and subnets are on the egress path but are not the egress mechanism: partial."
+    },
+    {
+      "query": "load balancer for incoming traffic",
+      "intent": "Find the load balancers and target groups that spread incoming requests.",
+      "style": "role",
+      "relevant": [
+        "D28",
+        "D29",
+        "D62",
+        "D63"
+      ],
+      "partial": [
+        "D04",
+        "D10",
+        "D23",
+        "D24"
+      ],
+      "note": "Target groups are the load balancer's routing half, so relevant. Web-entry EC2 hosts and internet gateways sit behind or before it: partial."
+    },
+    {
+      "query": "staging and test environment",
+      "intent": "Find everything in the non-production environment.",
+      "style": "paraphrase",
+      "relevant": [
+        "D02",
+        "D04",
+        "D05",
+        "D06",
+        "D07",
+        "D14",
+        "D15",
+        "D16",
+        "D17",
+        "D21",
+        "D24",
+        "D25",
+        "D28",
+        "D31",
+        "D33",
+        "D34",
+        "D39",
+        "D41",
+        "D42",
+        "D47",
+        "D49",
+        "D51",
+        "D52",
+        "D54",
+        "D55",
+        "D61",
+        "D62",
+        "D64",
+        "D66",
+        "D68",
+        "D73",
+        "D78"
+      ],
+      "partial": [],
+      "note": "Every description that says 'dev' (32 of 79). The descriptions never say 'staging' or 'test environment'; they say 'dev', 'validation', 'rehearsal'. A large-set query: tests whether a top-k cut-off truncates."
+    },
+    {
+      "query": "backups and snapshots",
+      "intent": "Find where database or system backups are kept.",
+      "style": "paraphrase",
+      "relevant": [],
+      "partial": [
+        "D44",
+        "D45"
+      ],
+      "note": "Near-negative: no description is a backup resource. D45 'might hold ... snapshots' and D44 'operational exports' are the closest, partial only."
+    },
+    {
+      "query": "Kubernetes cluster",
+      "intent": "Find container orchestration infrastructure.",
+      "style": "negative",
+      "relevant": [],
+      "partial": [],
+      "note": "Nothing runs on Kubernetes here; compute is EC2 and Auto Scaling groups. Any result is a false positive."
+    },
+    {
+      "query": "customer login and accounts",
+      "intent": "Find the system that handles shopper sign-in and user accounts.",
+      "style": "negative",
+      "relevant": [],
+      "partial": [],
+      "note": "Near-miss negative: IAM instance profiles, roles and policies (D13-D22) are about machine identity, not customer accounts, and customer-facing resources (D10, D29) do not mention login. A method that returns them is matching on 'identity'/'customer' surface words."
+    }
+  ],
+  "descriptions": {
+    "D01": "Auto Scaling group for one compute lane in the prod-like commerce footprint. It points to availability and deployment shape more than application semantics.",
+    "D02": "DB subnet group for dev database placement. It is concrete infrastructure with dev context kept in the description.",
+    "D03": "Database subnet group for part of the commerce data tier. It provides placement context without becoming an environment node.",
+    "D04": "Dev EC2 instance near a web-entry path for commerce validation. It is smaller than the production lane and mostly useful for rehearsing user-facing changes.",
+    "D05": "Dev EC2 instance near fulfillment-style background work. It is intentionally modest and points toward queue-driven testing.",
+    "D06": "Dev EC2 instance near order-flow experiments. It is suitable for checkout-like validation and lower-risk event handoffs.",
+    "D07": "Dev EC2 instance near product-information behavior. It carries enough catalog-like context for tests without implying production ownership.",
+    "D08": "EC2 instance in the production commerce environment with a fulfillment-worker flavor. It is near queues, slower background work, and shipment-shaped persistence.",
+    "D09": "EC2 instance in the production commerce environment with a product-information flavor. It appears near object assets, catalog-shaped data, and a few internal callers.",
+    "D10": "EC2 instance in the production commerce environment with a web-entry flavor. It is close to shopper traffic and usually talks inward rather than owning durable state.",
+    "D11": "EC2 instance in the production commerce environment with an order-flow flavor. It sits near purchase state, invoice artifacts, and event handoff resources.",
+    "D12": "Elastic IP associated with a NAT gateway. It is a small but concrete resource that can help a new hire follow public egress from private parts of the commerce footprint.",
+    "D13": "Instance profile attached to one EC2 resource. It keeps identity separate from compute and forces access reasoning through role and policy resources.",
+    "D14": "Instance profile for a dev EC2 host. Identity is separated from compute so access reasoning still goes through role and policy resources.",
+    "D15": "Dev IAM policy for database connectivity. The nearby RDS resource carries the better hint about the kind of data being exercised.",
+    "D16": "Dev IAM policy for object storage access. It supports validation fixtures and lower-risk artifacts without saying which application path owns them.",
+    "D17": "Dev IAM policy for queue access. It is useful for replay and integration-style testing around asynchronous commerce work.",
+    "D18": "IAM policy that mediates database connectivity for a production commerce path. The surrounding RDS node gives the better clue about whether the data is product, order, or fulfillment shaped.",
+    "D19": "IAM policy that mediates object storage access for a production commerce path. The exact read or write purpose is intentionally implied by neighboring bucket descriptions.",
+    "D20": "IAM policy that mediates queue access for background or event handoff behavior. The semantic direction is vague on purpose for indexing and reasoning exercises.",
+    "D21": "IAM role for dev commerce compute. It is lower-stakes than prod but still uses concrete policy resources to describe storage, database, and queue access.",
+    "D22": "IAM role used by a small group of commerce compute resources. The purpose is only hinted at by the policies and storage or queue resources connected nearby.",
+    "D23": "Internet gateway attached to the commerce VPC. It is part of the public edge story, but the customer-facing purpose is left as contextual text rather than a separate node.",
+    "D24": "Internet gateway for the dev commerce VPC. It supports lightweight external access for validation flows rather than the main customer path.",
+    "D25": "KMS key used by selected dev resources. It is included as concrete security infrastructure, not as a separate environment concept.",
+    "D26": "KMS key used by selected storage resources in the commerce footprint. It is a security-adjacent resource whose meaning comes from the encrypted bucket or database near it.",
+    "D27": "Launch template for one recurring compute shape in the commerce environment. It carries hints about how a purpose-specific host is reproduced without saying the purpose too directly.",
+    "D28": "Application load balancer for a dev-facing commerce entry path. It resembles the production edge but is described as a validation surface rather than a customer-critical resource.",
+    "D29": "Application load balancer near the customer entry path. The wording is intentionally soft: it points toward a storefront-like purpose in production without making that purpose a node.",
+    "D30": "NAT gateway used by private resources for controlled outbound traffic. It hints at backend compute needing external package, API, or telemetry access in the production-like environment.",
+    "D31": "Network ACL for the dev commerce area. It is concrete infrastructure, with environment semantics only in the name and description.",
+    "D32": "Network ACL paired with one subnet area. It is a coarse network guardrail for the environment and may matter when tracing why a resource can or cannot be reached.",
+    "D33": "Dev PostgreSQL instance with fulfillment or operational test state. It exists for validation, replay, or integration exercises.",
+    "D34": "Dev PostgreSQL instance with product or order-shaped data. It is intentionally smaller and more disposable than production resources.",
+    "D35": "PostgreSQL instance with fulfillment or operational state in the production commerce environment. It is a concrete data resource, not a derived domain node.",
+    "D36": "PostgreSQL instance with order or payment-adjacent data in the production commerce environment. Nearby policies and monitors give the rest of the story.",
+    "D37": "PostgreSQL instance with product or inventory-shaped data in the production commerce environment. It is intentionally not labeled as an application service.",
+    "D38": "RDS option group attached to database resources. Its description is intentionally thin because most semantics should be recovered from neighboring resources.",
+    "D39": "RDS option group attached to dev database resources. Its semantics are intentionally light.",
+    "D40": "RDS parameter group for a cluster of commerce database settings. It is included so database ownership and tuning context are not compressed into a single node.",
+    "D41": "RDS parameter group for dev database settings. It keeps database configuration granular without modeling dev as a node.",
+    "D42": "Route table for a dev slice of the commerce network. It hints at test traffic and internal reachability without creating an environment node.",
+    "D43": "Route table for a slice of the commerce network. It gives enough routing context to reason about internet-facing and internal paths without spelling out a service map.",
+    "D44": "S3 bucket containing operational exports for the commerce environment. Its purpose is deliberately broad and should be inferred from adjacent policies and dashboards.",
+    "D45": "S3 bucket containing order-adjacent artifacts in the commerce environment. It might hold generated files, snapshots, or handoff material.",
+    "D46": "S3 bucket containing product-adjacent objects for the commerce environment. The contents may be useful to customer-facing or product-information code paths.",
+    "D47": "S3 bucket for dev commerce artifacts. It may contain fixture data, generated files, or object samples used by validation flows.",
+    "D48": "Bucket policy attached to a concrete S3 bucket. It adds granularity between identity policy and object storage, with only light hints about the business purpose.",
+    "D49": "Bucket policy for a dev S3 bucket. It keeps bucket authorization explicit for the vector chunking exercise.",
+    "D50": "Security group for a concrete slice of the commerce environment. Its nearby rules and attachments reveal whether it is closer to edge, application, queue, or data access.",
+    "D51": "Security group for one dev resource slice. It mirrors production concepts but keeps the environment distinction inside resource text.",
+    "D52": "Security group rule for a dev network allowance. Its semantics are deliberately sparse and depend on attached groups and compute descriptions.",
+    "D53": "Security group rule for a specific network allowance. It is intentionally terse, so the useful meaning comes from the connected security groups and resource descriptions.",
+    "D54": "Dev SQS queue for order or catalog-adjacent event tests. It is meant for lower-risk replay and integration validation.",
+    "D55": "Dev SQS queue for worker-style or dead-letter testing. It mirrors production patterns in a smaller environment.",
+    "D56": "SQS queue for catalog, stock, or product refresh work. It is deliberately vague so indexing has to use both text and graph neighborhood.",
+    "D57": "SQS queue for fulfillment-adjacent work in the commerce environment. It points toward slower background processing without naming a service node.",
+    "D58": "SQS queue for purchase or order-adjacent events in the commerce environment. The exact producer and consumer are left to graph traversal.",
+    "D59": "SQS queue used as a dead-letter or operational buffer. It adds failure-handling granularity around asynchronous commerce work.",
+    "D60": "Subnet in the commerce VPC. The placement hints at public, private, or data-side usage in a prod-flavored environment, but the exact workload boundary is intentionally indirect.",
+    "D61": "Subnet in the dev commerce VPC. It is intentionally smaller and less redundant than prod, but it still carries realistic placement context for application and data resources.",
+    "D62": "Target group for a dev compute lane. It gives enough structure for routing analysis without a derived service node.",
+    "D63": "Target group for one slice of commerce compute. It suggests runtime grouping and deployment boundaries, but callers must inspect adjacent nodes to infer the purpose.",
+    "D64": "Dev-flavored network boundary for a smaller commerce footprint. It resembles production enough for rehearsal work, but the wording leaves ownership and service mapping to nearby resources.",
+    "D65": "Production-like network boundary for a compact commerce footprint. It suggests a shared environment for web entry, internal application traffic, and data-adjacent resources without naming those concerns as graph nodes.",
+    "D66": "Dashboard for the dev commerce footprint. It groups concrete resources used for validation without modeling dev as a standalone node.",
+    "D67": "Dashboard for the production commerce footprint. It collects signals from concrete compute, queue, storage, and database resources while leaving service and environment semantics in descriptions.",
+    "D68": "Datadog monitor for dev commerce validation. It watches lower-stakes latency, queue, database, or storage signals and keeps environment context in text.",
+    "D69": "Datadog monitor watching customer-adjacent latency or availability in production. It is vague enough that related compute must be inspected.",
+    "D70": "Datadog monitor watching database or storage pressure in production. The affected purpose depends on the neighboring resource.",
+    "D71": "Datadog monitor watching order-flow health in production. It hints at business impact without creating a checkout node.",
+    "D72": "Datadog monitor watching queue depth or worker lag in production. It is tied to asynchronous work through resource edges.",
+    "D73": "GitHub repository used around dev commerce validation. The text hints at environment and purpose without introducing a service or environment node.",
+    "D74": "Repository near fulfillment or worker behavior. Its purpose is intentionally a little fuzzy for retrieval exercises.",
+    "D75": "Repository near order-flow behavior. It gives source-control context for a production path without creating a separate service node.",
+    "D76": "Repository near product information behavior. It is one of several source resources that eventually reach EC2 through workflow nodes.",
+    "D77": "Repository near the customer-entry part of the commerce system. It contains production code, but the graph leaves the runtime purpose embedded in text and deployment edges.",
+    "D78": "GitHub Actions workflow that deploys one source path toward dev compute. It makes the dev environment visible as resource metadata only.",
+    "D79": "GitHub Actions workflow that moves one source path toward production compute. It carries deployment and environment meaning in a concrete workflow resource."
+  }
+}

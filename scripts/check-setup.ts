@@ -16,7 +16,7 @@ console.log("ok  deepagents loads");
 
 try {
   const { nodes, relationships } = await assertGraphSeeded();
-  console.log(`ok  Neo4j seeded: ${nodes} nodes, ${relationships} relationships`);
+  console.log(`ok  Neo4j seeded and indexed: ${nodes} nodes, ${relationships} relationships`);
 } finally {
   await closeDriver();
 }

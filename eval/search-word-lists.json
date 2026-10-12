@@ -1,0 +1,348 @@
+{
+  "haiku, first writer": {
+    "product catalog": [
+      "catalog",
+      "catalogue",
+      "product",
+      "sku",
+      "item listing"
+    ],
+    "checkout and orders": [
+      "checkout",
+      "order",
+      "cart",
+      "basket"
+    ],
+    "fulfillment": [
+      "fulfil",
+      "warehouse",
+      "pick",
+      "pack",
+      "dispatch"
+    ],
+    "shipping and delivery": [
+      "shipping",
+      "deliver",
+      "courier",
+      "carrier",
+      "parcel"
+    ],
+    "customer-facing storefront": [
+      "storefront",
+      "store front",
+      "frontend",
+      "front end",
+      "customer-facing",
+      "website",
+      "web app"
+    ],
+    "payment processing": [
+      "payment",
+      "charge",
+      "billing",
+      "stripe",
+      "checkout"
+    ],
+    "stock levels": [
+      "stock",
+      "inventory",
+      "quantity",
+      "warehouse"
+    ],
+    "message queues": [
+      "queue",
+      "sqs",
+      "message",
+      "topic",
+      "sns",
+      "kafka"
+    ],
+    "retry failed messages": [
+      "dead letter",
+      "dlq",
+      "retry",
+      "retries",
+      "failed",
+      "redrive"
+    ],
+    "SQL databases": [
+      "sql",
+      "database",
+      "rds",
+      "postgres",
+      "mysql",
+      "aurora"
+    ],
+    "file and object storage": [
+      "bucket",
+      "s3",
+      "object",
+      "file",
+      "blob",
+      "efs",
+      "storage"
+    ],
+    "monitoring and alerting": [
+      "monitor",
+      "alert",
+      "datadog",
+      "cloudwatch",
+      "alarm",
+      "notify"
+    ],
+    "slow page load alerts": [
+      "latency",
+      "slow",
+      "page load",
+      "response time",
+      "load time",
+      "duration"
+    ],
+    "deployment pipeline": [
+      "deploy",
+      "pipeline",
+      "workflow",
+      "release",
+      "build",
+      "ci/cd"
+    ],
+    "permissions and roles": [
+      "permission",
+      "role",
+      "iam",
+      "policy",
+      "access",
+      "privilege"
+    ],
+    "firewall rules": [
+      "firewall",
+      "security group",
+      "ingress",
+      "inbound",
+      "nacl",
+      "network acl"
+    ],
+    "outbound internet from private servers": [
+      "nat gateway",
+      "natgw",
+      "egress",
+      "outbound",
+      "internet gateway",
+      "private subnet"
+    ],
+    "load balancer for incoming traffic": [
+      "load balancer",
+      "elb",
+      "alb",
+      "nlb",
+      "target group",
+      "listener",
+      "incoming"
+    ],
+    "staging and test environment": [
+      "staging",
+      "test",
+      "sandbox",
+      "non-prod",
+      "nonprod",
+      "preprod",
+      "qa"
+    ],
+    "backups and snapshots": [
+      "backup",
+      "snapshot",
+      "restore",
+      "recovery",
+      "vault"
+    ],
+    "Kubernetes cluster": [
+      "kubernetes",
+      "k8s",
+      "eks",
+      "cluster",
+      "pod",
+      "node group",
+      "helm"
+    ],
+    "customer login and accounts": [
+      "login",
+      "log in",
+      "sign in",
+      "signin",
+      "auth",
+      "cognito",
+      "account",
+      "user pool",
+      "identity"
+    ]
+  },
+  "haiku, second writer": {
+    "product catalog": [
+      "product",
+      "catalog",
+      "catalogue",
+      "sku"
+    ],
+    "checkout and orders": [
+      "checkout",
+      "order",
+      "cart",
+      "basket"
+    ],
+    "fulfillment": [
+      "fulfil",
+      "warehouse",
+      "pick and pack",
+      "shipment"
+    ],
+    "shipping and delivery": [
+      "ship",
+      "deliver",
+      "courier",
+      "carrier",
+      "parcel"
+    ],
+    "customer-facing storefront": [
+      "storefront",
+      "store front",
+      "frontend",
+      "front-end",
+      "customer-facing",
+      "website",
+      "web app",
+      "shop"
+    ],
+    "payment processing": [
+      "payment",
+      "billing",
+      "stripe",
+      "charge"
+    ],
+    "stock levels": [
+      "stock",
+      "inventory",
+      "on hand",
+      "quantity"
+    ],
+    "message queues": [
+      "queue",
+      "sqs",
+      "sns",
+      "topic",
+      "kafka",
+      "message bus"
+    ],
+    "retry failed messages": [
+      "retry",
+      "dead-letter",
+      "dead letter",
+      "dlq",
+      "redrive",
+      "failed message"
+    ],
+    "SQL databases": [
+      "database",
+      "rds",
+      "postgres",
+      "mysql",
+      "aurora",
+      "sql"
+    ],
+    "file and object storage": [
+      "s3",
+      "bucket",
+      "object storage",
+      "file",
+      "storage",
+      "blob",
+      "efs"
+    ],
+    "monitoring and alerting": [
+      "monitor",
+      "alert",
+      "alarm",
+      "cloudwatch",
+      "datadog",
+      "dashboard"
+    ],
+    "slow page load alerts": [
+      "latency",
+      "slow",
+      "page load",
+      "load time",
+      "response time",
+      "p95"
+    ],
+    "deployment pipeline": [
+      "deploy",
+      "pipeline",
+      "ci/cd",
+      "github actions",
+      "workflow",
+      "release"
+    ],
+    "permissions and roles": [
+      "permission",
+      "role",
+      "iam",
+      "polic",
+      "access control"
+    ],
+    "firewall rules": [
+      "firewall",
+      "security group",
+      "nacl",
+      "ingress",
+      "network acl"
+    ],
+    "outbound internet from private servers": [
+      "nat gateway",
+      "egress",
+      "outbound",
+      "internet gateway",
+      "private subnet"
+    ],
+    "load balancer for incoming traffic": [
+      "load balancer",
+      "alb",
+      "elb",
+      "nlb",
+      "listener",
+      "target group"
+    ],
+    "staging and test environment": [
+      "staging",
+      "test",
+      "sandbox",
+      "non-prod",
+      "preprod"
+    ],
+    "backups and snapshots": [
+      "backup",
+      "snapshot",
+      "restore",
+      "point-in-time",
+      "retention",
+      "recovery"
+    ],
+    "Kubernetes cluster": [
+      "kubernetes",
+      "k8s",
+      "eks",
+      "cluster",
+      "pod",
+      "helm",
+      "node group"
+    ],
+    "customer login and accounts": [
+      "login",
+      "log in",
+      "sign-in",
+      "sign in",
+      "auth",
+      "account",
+      "cognito",
+      "user pool"
+    ]
+  }
+}
