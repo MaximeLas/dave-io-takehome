@@ -37,6 +37,8 @@ export interface RunRecord {
   model: string;
   modelSettings: Record<string, unknown>;
   promptVersion: string;
+  /** One hash over everything the model reads: prompt, tools, model and settings (see version.ts). */
+  agentVersion: string;
   /** The model and revision that embed search phrases; the description index must have been built by the same. */
   embeddingModel: string;
   /** The git commit the code ran from, "-dirty" when the tree had changes; "unknown" outside git. */

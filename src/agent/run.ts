@@ -20,6 +20,7 @@ import {
 } from "./agent.js";
 import { EMBEDDING_MODEL_ID } from "../search/model.js";
 import { PROMPT_VERSION } from "./prompt.js";
+import { agentVersion } from "./version.js";
 import { costUsd, type RunRecord, type TokenUsage, type ToolCallRecord } from "./record.js";
 
 /** A question for the agent, with its eval id when it is one of the fixed thirty. */
@@ -95,6 +96,7 @@ export async function runAgent(input: RunInput, options: RunOptions = {}): Promi
     model: settings.model,
     modelSettings: { effort: settings.effort, maxTokens: settings.maxTokens },
     promptVersion: PROMPT_VERSION,
+    agentVersion: agentVersion(settings),
     embeddingModel: EMBEDDING_MODEL_ID,
     codeVersion: codeVersion(),
     startedAt: startedAt.toISOString(),

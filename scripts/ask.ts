@@ -53,7 +53,7 @@ try {
   console.log(record.ids.join("\n"));
   console.log();
   console.log(
-    `model ${record.model}, effort ${String(record.modelSettings.effort)}, prompt ${record.promptVersion}, ` +
+    `model ${record.model}, effort ${String(record.modelSettings.effort)}, prompt ${record.promptVersion}, agent ${record.agentVersion}, ` +
       `code ${record.codeVersion}, ${record.modelCalls} model calls (last stop: ${record.stopReasons.at(-1) ?? "unknown"}), ${record.toolCalls.length} tool calls, ` +
       `${(record.durationMs / 1000).toFixed(1)} s`,
   );
