@@ -7,7 +7,7 @@
 
 **Hypothesis.** Stating the interpretations a cloud engineer brings to this estate fixes these readings. If the interpretations are general domain knowledge rather than patches for these questions, they should also hold on questions the eval does not ask.
 
-**Change.** A conventions section in the prompt (`src/agent/conventions.ts`). To keep it general, an engineer explored the live graph without seeing the questions, the key or any run, and wrote the reading guide it would hand a new hire. The prompt carries its interpretations:
+**Change.** A conventions section in the prompt (`src/agent/conventions.ts`). To keep it general, a Claude agent explored the live graph without seeing the questions, the key or any run, and wrote the reading guide it would hand a new hire. The prompt carries its interpretations:
 - environment from names;
 - business areas;
 - the graph over the descriptions;

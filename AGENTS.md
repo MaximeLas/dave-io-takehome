@@ -2,7 +2,7 @@
 
 Infrastructure knowledge chat: a NestJS backend runs a `deepagents` agent that answers questions about the mock infrastructure graph in Neo4j, combining graph traversal with vector search over node descriptions. An eval harness scores the agent on 30 fixed questions in CI and fails the build on a regression.
 
-The assignment is `README.md`; the specification of what the agent must answer is `eval/QUESTIONS.md`.
+The assignment is `README.md`; the specification of what the agent must answer is `eval/QUESTIONS.md`. How it was answered, with the decisions, the measurements and what is known to be wrong, is `SOLUTION.md`.
 
 ## Where code goes
 
