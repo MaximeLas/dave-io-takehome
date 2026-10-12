@@ -12,8 +12,9 @@
 // Both allowances are measured at accept from the spread of the three trials; they live in the
 // baseline file, so a threshold is versioned with the scores it protects. Rule 2 has no allowance,
 // and a question that passes most of the time can enter the solid set by three lucky draws, so the
-// gate as a whole turns red on unchanged code about one run in ten (simulated from the shipped
-// prompt's per-question pass rates); a red run's first move is one re-run. A green run never becomes
+// gate as a whole turns red on unchanged code about one run in nine, and about one in thirty again
+// on a re-run, which meets the same baseline (`npm run simulate-gate`, eval/simulate.ts, from the
+// committed baseline); a red run's first move is one re-run. A green run never becomes
 // the baseline by itself: with any tolerance, a baseline that followed every green run could ratchet
 // down one question at a time.
 import { mkdir, readFile, writeFile } from "node:fs/promises";

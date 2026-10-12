@@ -54,6 +54,10 @@ One line per fact, linked to its entry. The id is the handle: cite it, or search
 
 - **F26** [The embedding model runs locally; its two ONNX ports give the same vectors to six decimals](#f26-the-embedding-model-runs-locally-its-two-onnx-ports-give-the-same-vectors-to-six-decimals): no key, 384 numbers, downloaded on first use
 
+**[The eval gate](#the-eval-gate)**
+
+- **F27** [On unchanged code the gate is red about one run in nine, and red twice about one in thirty](#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-thirty): simulated from the committed baseline; a floor, since its rates are three draws per question
+
 ## deepagents
 
 ### F1. Structured output: `toolStrategy()` with the tool choice left to the model
@@ -282,3 +286,15 @@ On the configuration shipped until the business-area conventions (Haiku 5.5, eff
 - Source: `eval/baselines/claude-haiku-5-5.high.json` at commit `2520733`; CI runs `38176597100`, `38177866540`, `38178162042`; eval records under `runs/eval/`
 - Evidence: `git show 2520733:eval/baselines/claude-haiku-5-5.high.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(Object.entries(JSON.parse(s).questions).filter(([, v]) => v !== "pass").map(([q]) => q).join(" ")))'` lists the accepted run's six failures; `git show -s 2520733` gives the four runs on the baseline commit; `gh run view 38178162042 --log | grep ' FAIL '` (likewise the other two runs) lists each CI run's failures; with records under `runs/eval/` (a local eval, or a CI run's `runs-attempt-<n>` artifact), `jq -r 'select(.full and .model=="claude-haiku-5-5" and .effort=="high" and .promptVersion=="1f77e706" and .totals.errors==0) | .questions[] | "\(.id) \(.status)"' runs/eval/*.json | sort | uniq -c` counts each question's passes and failures
 - Checked: 2026-10-12
+
+## The eval gate
+
+What is known about the gate's own behaviour (`eval/baseline.ts`), as opposed to the agent it judges.
+
+### F27. On unchanged code the gate is red about one run in nine, and red twice about one in thirty
+
+Judged by the three rules against the committed baseline (Haiku 5.5, effort high, accepted on `0c204d8`), a later three-trial run of the same agent is red 11.0% of the time: rule 2 7.7%, all of it "Which repository's code ends up on i-ecomm-dev-02?", the one question at 2 of 3 entering the solid set by luck and then failing two trials; rule 3 3.6%; rule 1 never. A red run is red again on one re-run 3.3% of the time, not the square of 11%, because the re-run meets the same baseline: a wobbly question that entered the solid set is still in it. The model behind the figures takes each question's pass rate as its passes out of three in the baseline, so a question at 3 of 3 never fails in the simulation and the rule 2 figure is a floor; the cost of a trial is a normal draw with the mean and deviation of the baseline's three costs. Each figure carries a Monte Carlo standard error of about 0.1 points.
+
+- Source: `eval/baselines/claude-haiku-5-5.high.json`; `eval/simulate.ts`, which judges each simulated run with the gate's own `baselineFrom()` and `gate()`
+- Evidence: `npm run simulate-gate` (100,000 pairs, seed 1) prints rule 1 0.0%, rule 2 7.7%, rule 3 3.6%, any rule 11.0%, red twice 3.3%; `npm run simulate-gate -- --seed 2` gives the same figures within 0.1 points; `npm test` checks the one-wobbly-question case against the hand calculation (0.296 × 0.259 ≈ 7.7%)
+- Checked: 2026-10-13

@@ -9,7 +9,8 @@
     "check": "tsx --env-file-if-exists=.env scripts/check-setup.ts",
     "index": "tsx --env-file-if-exists=.env src/search/build-index.ts",
     "ask": "tsx --env-file-if-exists=.env scripts/ask.ts",
-    "eval": "tsx --env-file-if-exists=.env scripts/eval.ts"
+    "eval": "tsx --env-file-if-exists=.env scripts/eval.ts",
+    "simulate-gate": "tsx scripts/simulate-gate.ts"
   },
   "private": true,
   "type": "module",
