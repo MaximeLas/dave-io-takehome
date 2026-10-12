@@ -12,3 +12,4 @@ One file per change that affects what the agent answers (prompt, tools, model, s
 | 2026-10-12 | [How the agent reads a business area](2026-10-12-business-area.md) | 25, 25, 25, 24 → 27, 27, 24 |
 | 2026-10-12 | [Search by meaning over the descriptions](2026-10-12-meaning-search.md) | 25, 26, 26 → 25, 25, 26 |
 | 2026-10-13 | [The answer key, audited](2026-10-13-key-audit.md) (not a change to the agent) | against the key 26, 26, 27; against the amended key 27, 27, 28 (one run) |
+| 2026-10-13 | [The solid set, earned over six draws](2026-10-13-solid-six.md) (not a change to the agent) | the accept 24, 26, 26; simulated rule 2 false reds 14.8% → 4.5% |

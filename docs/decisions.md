@@ -52,7 +52,7 @@ Numbers come from committed files only: the experiment files in [`eval/experimen
 - A keyword filter as the read-only guard: writes can hide in procedure calls, and legitimate text contains the keywords.
 - A read-only database user: the Community edition the fixture ships has no roles.
 
-**Evidence.** The baseline's three trials (prompt `1d555744`) made 168 to 178 tool calls each, with 2, 2 and 6 Cypher errors. On the first scored runs (commit `e4ddc69`), mean recall was near 90%: the failures were in what the answers claimed, not in what the queries found. None of the failures diagnosed in the experiment files since was a query the model could not write.
+**Evidence.** The baseline's three trials (13 Oct, prompt `1d555744`) made 160 to 169 tool calls each, with 4, 0 and 5 Cypher errors. On the first scored runs (commit `e4ddc69`), mean recall was near 90%: the failures were in what the answers claimed, not in what the queries found. None of the failures diagnosed in the experiment files since was a query the model could not write.
 
 **What would change it.** Traces showing one query shape written wrong again and again, or schema discovery dominating the turns: then a specific tool beside the generic one, or the schema in the prompt, each measured. A much larger graph would revisit the cap and the timeout.
 
@@ -144,7 +144,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 
 **Revised.** The first tool description invited wider searches, and the model asked for 15 to 80 descriptions up front; the revised one asks for the default first.
 
-**Evidence on the eval.** 25, 25, 26 passes at $0.091 a trial, against the baseline's 25, 26, 26 at $0.089, as predicted beforehand. With no line in the prompt about it, search was called on the same 8 questions in both local runs, each naming a purpose.
+**Evidence on the eval.** 25, 25, 26 passes at $0.091 a trial, against the 12 Oct baseline's 25, 26, 26 at $0.089, as predicted beforehand. With no line in the prompt about it, search was called on the same 8 questions in both local runs, each naming a purpose.
 
 **What would change it.** A held-out reworded set showing whether search turns into correct answers on unfamiliar wording.
 
@@ -250,7 +250,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 - A cost rule that relaxes when the score rises: it needs an exchange rate between cents and questions.
 - Five trials at one accept for the solid set: 24% entry by luck for a question at 75% (0.75⁵), against 18% for the second round, which also costs nothing extra for a question that fails early.
 
-**Evidence.** Baseline (commit `268529c`, prompt `1d555744`), under the first entry rule: 25, 26, 26 passes, tolerance 1; 8.9 cents a trial, margin 0.73 cents. Unchanged code turned red about one run in nine, and red again on one re-run about one in thirty ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-thirty), `npm run simulate-gate`).
+**Evidence.** Baseline (commit `8bf30c0`, taken on `b0fb213`, prompt `1d555744`): 24, 26, 26 passes, tolerance 2; 8.6 cents a trial, margin 1.06 cents; 24 solid questions, all 24 entrants passing the second round's three runs (72 runs, 18.2 cents). Simulated on that baseline, rule 2 turns unchanged code red 4.5% of the time against 14.8% under the one-round entry, and the gate as a whole about one run in nine against one in five; red again on one re-run about one in twenty-five ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-five), `npm run simulate-gate`, [the experiment](../eval/experiments/2026-10-13-solid-six.md)). The previous baseline (commit `268529c`), under the one-round entry, was 25, 26, 26 with tolerance 1, 8.9 cents with margin 0.73, 25 solid questions.
 
 **Revised.** The first estimate said one in a hundred after a re-run: it treated the re-run as independent, when both runs face the same solid set.
 
@@ -270,7 +270,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 - A retake for cost headroom: it resets the margin and hides the cumulative drift a later red run would expose.
 - A scheduled retake: a calendar in place of a reason.
 
-**Evidence.** Meaning search shipped under the corrected rule with no accept: 25, 25, 26 at $0.091 a trial, against the baseline's 25, 26, 26 at $0.089 and its 9.7-cent ceiling ([meaning search](../eval/experiments/2026-10-12-meaning-search.md)).
+**Evidence.** Meaning search shipped under the corrected rule with no accept: 25, 25, 26 at $0.091 a trial, against the baseline's 25, 26, 26 at $0.089 and its 9.7-cent ceiling ([meaning search](../eval/experiments/2026-10-12-meaning-search.md)). The next retake (commit `8bf30c0`) came from a change to the gate, not to the agent: the solid set is now earned over two accept rounds, and the gate refuses a baseline in the one-round format ([the experiment](../eval/experiments/2026-10-13-solid-six.md)).
 
 **What would change it.** A provider-side change under the same model id shifting every run, which calls for re-declaring the benchmark with the cause stated.
 

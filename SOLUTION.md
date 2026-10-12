@@ -5,7 +5,7 @@ How the assignment in `README.md` was answered: the agent, how it is measured, w
 **In brief**
 
 - A chat over the infrastructure graph in Neo4j: one `deepagents` agent with a read-only Cypher tool and a vector search over the node descriptions, behind a NestJS server and a chat page. The chat and the eval call the same entry point, so what is scored is what ships.
-- Claude Haiku 5.5 at effort high ships. The committed baseline passes 25, 26 and 26 of the thirty questions over three trials (12 Oct, prompt `1d555744`) at about 9 cents a trial. Sonnet 5.5, measured on 11 Oct on the earlier prompt over three runs each, scored one to three questions lower on every run at ten times the cost, and stays an option in the chat.
+- Claude Haiku 5.5 at effort high ships. The committed baseline passes 24, 26 and 26 of the thirty questions over three trials (13 Oct, prompt `1d555744`) at about 9 cents a trial. Sonnet 5.5, measured on 11 Oct on the earlier prompt over three runs each, scored one to three questions lower on every run at ten times the cost, and stays an option in the chat.
 - CI runs three trials on every pull request and push to `main` and holds them to three rules against the baseline: the mean, the questions that passed all six draws of the accept, and the cost. A drop fails the build; a green run never moves the baseline.
 - Three questions fail on every run, and no line was written to win one question; three more wobble between runs, one of them at 0 of 3 in the baseline.
 - The key is audited: every answer re-derived from the graph with a query anyone re-runs ([`eval/key-audit.md`](eval/key-audit.md)). 28 of 30 agree, one is ambiguous, one is a key error, amended in an overlay; the eval prints the score against both (26, 26, 27 and 27, 27, 28 in one three-trial run), and the gate reads the key. The amended set is the conventions' own reading, which the agent follows, so the second score shows which misses remain the agent's; it is not evidence that the amendment is right.
@@ -149,7 +149,7 @@ An answer that ends in prose without the call is recorded as empty and fails.
 - **Prose endings:** Sonnet ended 2, 2 and 3 answers in 30 in prose instead of calling `final_answer`, often with the right answer in the prose; Haiku never did.
 - **Cost:** Haiku cost about a tenth, 11 to 12 cents per run of thirty questions, against $1.09 to $1.40 for Sonnet.
 
-What separated the two was mostly the answer contract, not capability. At a tenth of the cost, with one model for CI to gate, Haiku ships and the chat keeps Sonnet as an option. In the current baseline's 90 runs (12 Oct, prompt `1d555744`), a question costs about 0.3 cents and takes about 11 seconds at the median (from the local run records; the baseline file holds no durations), against 9 to 10 seconds for Sonnet on 11 Oct: Haiku is cheaper and slower.
+What separated the two was mostly the answer contract, not capability. At a tenth of the cost, with one model for CI to gate, Haiku ships and the chat keeps Sonnet as an option. In the 90 runs of the baseline taken on 12 Oct (prompt `1d555744`, commit `268529c`), a question costs about 0.3 cents and takes about 11 seconds at the median (from the local run records; the baseline file holds no durations), against 9 to 10 seconds for Sonnet on 11 Oct: Haiku is cheaper and slower.
 
 What was not measured, and what is not wired:
 
@@ -177,7 +177,7 @@ So the tool ships as a complement to the word guessing, not a replacement. Rejec
 
 **On the eval,** the revised tool held the score and the cost, as the hypothesis written before the run said:
 
-- **Score and cost:** three trials passed 25, 25, 26 at 9.1 cents a trial, against the baseline's 25, 26, 26 at 8.9 cents, the same within noise.
+- **Score and cost:** three trials passed 25, 25, 26 at 9.1 cents a trial, against the 12 Oct baseline's 25, 26, 26 at 8.9 cents, the same within noise.
 - **Where the search was called:** in both local runs, on the same 8 questions, each naming a purpose, and on none that the graph's structure answers, with no line in the prompt asking it to.
 
 ## The eval, as error analysis
@@ -215,7 +215,7 @@ Each change is written up in [`eval/experiments/`](eval/experiments/README.md), 
 | [Business area](eval/experiments/2026-10-12-business-area.md) | The agent found an area's resources, then dropped them, modelling an area as a lane of compute | 25, 25, 25, 24 (four runs) → 27, 27, 24 |
 | [Meaning search](eval/experiments/2026-10-12-meaning-search.md) | Not a failure: the required vector layer, hypothesis "no change" | 25, 26, 26 → 25, 25, 26 |
 
-The agent did not change between the third row's "after" and the fourth row's "before": both are runs of the same prompt, and the gap between 27, 27, 24 and 25, 26, 26 is its run-to-run spread, 24 to 27 over the ten runs of the agent before meaning search. The fourth row's "before" is the committed baseline, taken on that prompt after the business-area runs.
+The agent did not change between the third row's "after" and the fourth row's "before": both are runs of the same prompt, and the gap between 27, 27, 24 and 25, 26, 26 is its run-to-run spread, 24 to 27 over the ten runs of the agent before meaning search. The fourth row's "before" is the baseline of 12 Oct (commit `268529c`), taken on that prompt after the business-area runs.
 
 **How much of the score rests on the key.** I am not on dave.io's team, so the only record of what its words mean on this estate (what "reach" means, what counts as storage, what makes up a business area) is its answer key. A new engineer learns the house vocabulary from the house's answers, and the conventions write that vocabulary down once, for every question. The key was generated by a script ([F21](docs/facts.md#f21-the-answer-key-is-generated-by-a-script-outside-this-repository)), so each expected set follows a rule; what I took from it is the rule, stated as a reading a person would give, never a line written to win one question. Where the key contradicted itself, I asked instead of guessing: on whether queues are data resources ([Known misses](#known-misses)). Three readings in the conventions were taken from the key:
 
@@ -237,32 +237,46 @@ The gate reads three trials (every question three times) against a baseline of t
 2. **The solid set:** a question that passed all six draws of the accept must pass at least two of three. The accept draws them in two rounds: the three trials, then up to three more runs of each question that passed them all, stopped at its first failure. The other questions are reported, never gated.
 3. **Cost:** the mean cost per trial may not rise by more than the cost margin.
 
-The current baseline is [`eval/baselines/claude-haiku-5-5.high.json`](eval/baselines/claude-haiku-5-5.high.json), taken on 12 Oct on prompt `1d555744`, before meaning search:
+The current baseline is [`eval/baselines/claude-haiku-5-5.high.json`](eval/baselines/claude-haiku-5-5.high.json), taken on 13 Oct on the shipped agent (prompt `1d555744`, with meaning search) with the two-round accept (commit `8bf30c0`):
 
-- **Passes:** 25, 26, 26, with a tolerance of 1, so rule 1 fails at 73 passes or fewer over three trials (a mean of 24.3).
-- **Cost:** 8.9 cents a trial with a margin of 0.73 cents, so rule 3 fails above 9.7 cents.
-- **Solid set:** 25 questions.
+- **Passes:** 24, 26, 26, with a tolerance of 2, so rule 1 fails at 69 passes or fewer over three trials (a mean of 23).
+- **Cost:** 8.6 cents a trial with a margin of 1.06 cents, so rule 3 fails above 9.7 cents.
+- **Solid set:** 24 questions. All 24 that passed the three trials also passed the second round's three runs (72 runs, 18.2 cents). The one question that left against the previous baseline, "Which instances can connect to rds-commerce-prod-4?", fell to 2 of 3 in the trials ([the experiment](eval/experiments/2026-10-13-solid-six.md)).
 
 In questions, against that baseline:
 
-- **Caught:** a fall of more than one question on the mean.
+- **Caught:** a fall of more than two questions on the mean.
 - **Caught:** any solid question falling to one of three.
 - **Let through:** a solid question falling to two of three passes both rules, though the report prints it beside the baseline.
 
 **Where the allowances come from.** The gate has to know how much the score moves when nothing changes, so that it does not fail a change for noise. It measures that from the three accept trials:
 
-- **Each allowance is the spread of the three accept trials,** highest minus lowest. On the current baseline the three pass counts were 25, 26, 26, so the tolerance is 1.
+- **Each allowance is the spread of the three accept trials,** highest minus lowest. On the current baseline the three pass counts were 24, 26, 26, so the tolerance is 2; on the previous one (12 Oct, 25, 26, 26) it was 1.
 - **Each has a floor,** one pass for the tolerance and 5% of the mean cost for the margin, because three trials can agree by luck and an allowance of zero would fail the next run on any wobble.
-- **Three draws underestimate the noise.** Across the ten runs of the agent before meaning search on this prompt (the business-area experiment and the two baseline commits, `5a34d8e` and `268529c`), the pass count ranged from 24 to 27, a spread of 3; the three accept trials happened to fall within 1. The tolerance is therefore tighter than the real wobble, which is why unchanged code can go red and the policy below says re-run once.
+- **Three draws underestimate the noise.** Across the ten runs of the agent before meaning search on this prompt (the business-area experiment and the two baseline commits, `5a34d8e` and `268529c`), the pass count ranged from 24 to 27, a spread of 3; the three accept trials of 12 Oct happened to fall within 1, and those of 13 Oct within 2. The tolerance is therefore tighter than the real wobble, which is why unchanged code can go red and the policy below says re-run once.
 
 A tolerance from one accept is a simplicity trade. Rejected: a hand-set tolerance, which turns each accept into an argument instead of a measurement; and more accept trials, which cost more per accept and are [a next step](#how-i-would-take-this-further).
 
-**Unlucky draws.** Rule 2 has no allowance, and a question that usually passes can enter the solid set by three lucky draws. So unchanged code turns the gate red about one run in nine, and about one in thirty is red again on one re-run, because the re-run is judged against the same baseline and a wobbly question that entered the solid set by luck is still in it (`npm run simulate-gate`, `scripts/simulate-gate.ts`: 100,000 simulated pairs of runs, seed 1, from the committed baseline's per-question passes out of three; red 11.0%, rule 2 7.7%, rule 3 3.6%, rule 1 never; red twice 3.3%). An earlier estimate, from pass rates pooled over ten local runs, also gave about one in ten, but one in a hundred after a re-run, because it treated the re-run as independent of the accept. Policy: re-run once, investigate red twice. The re-run has a price: a real drop also gets two attempts, so a solid question that fell to passing half the time clears rule 2 on one attempt about half the time and on one of two about three times in four. The re-run buys fewer false reds at the cost of slower detection of a wobble; a collapse is caught either way.
+**Unlucky draws.** Rule 2 has no allowance, so a question that usually passes and enters the solid set by luck turns the gate red on code that did not change. It happened twice on 13 Oct, on a pull request that changed only documentation: "Which instances would a deploy to the auto scaling group hit?" passed 1 of 3 in [CI run 38314893054](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38314893054), then "Do any GitHub workflows deploy directly to a database?" passed 1 of 3 in [run 38319345402](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38319345402), two of its trials listing the eight deploy workflows they had checked as the answer to a question whose answer is none; each re-run went green. The solid set was then earned over three draws; it is now earned over six, which cuts the chance that a question at 75% enters by luck from 42% to 18%. Simulated on the current baseline (`npm run simulate-gate`, `scripts/simulate-gate.ts`: 100,000 pairs of an accept and a later three-trial run of the same agent, seed 1, each question passing at its rate in the baseline file; [F27](docs/facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-five)), on the same input:
+
+| Entry to the solid set | Rule 2 red | Any rule red | Red again on one re-run |
+| --- | --- | --- | --- |
+| Three draws (`--rounds 1`) | 14.8% | 19.9%, one run in 5 | 7.5%, one in 13 |
+| Six draws (the gate) | 4.5% | 11.1%, one run in 9 | 3.7%, one in 27 |
+
+What the table does and does not say:
+
+- **Rule 2's share falls to under a third.** What remains comes from the two questions at 2 of 3 in the baseline passing all six draws by luck.
+- **The total falls less,** because rule 3 is now the largest single source (6.1%): the baseline's three costs include one trial at 9.3 cents and two at 8.3, a deviation the 5% floor on the margin barely covers. The cost rule over the solid questions only, in [the next steps](#how-i-would-take-this-further), would narrow it.
+- **It is a floor.** The model takes a question at 6 of 6 as never failing, and both questions that broke rule 2 in CI are at 6 of 6 in this baseline. Pooled over the thirteen local eval records of the shipped prompt (not committed; [the experiment](eval/experiments/2026-10-13-solid-six.md)), the gate is red 13.9% of the time with six draws against 18.6% with three.
+- **Six draws do not end lucky entries:** a question at 85% still enters about four times in ten (0.85⁶ ≈ 0.38). The direct fix for the padding behind the second red is a change to the agent, for the improvement loop, not to the gate.
+
+A red run is red again on one re-run more often than the square of the red rate would say (3.7% against 1.2%), because the re-run is judged against the same baseline and a wobbly question that entered the solid set by luck is still in it. An earlier estimate, from pass rates pooled over ten local runs, gave about one in a hundred after a re-run because it treated the re-run as independent of the accept. Policy: re-run once, investigate red twice. The re-run has a price: a real drop also gets two attempts, so a solid question that fell to passing half the time clears rule 2 on one attempt about half the time and on one of two about three times in four. The re-run buys fewer false reds at the cost of slower detection of a wobble; a collapse is caught either way.
 
 How close the rules sit, as observed:
 
-- **Rule 2, in CI:** one such red occurred, on the first CI run of meaning search. "Do any GitHub workflows deploy directly to a database?" passed 1 of 3, a question that had passed 10 of 11 runs before and called no search ([meaning search](eval/experiments/2026-10-12-meaning-search.md)).
-- **Rule 1, in a local run** (not in CI, so not in the public record): a three-trial run of the same agent on 12 Oct scored 24, 25, 25, exactly the floor of 74 passes. One fewer pass in any trial would have failed it.
+- **Rule 2, in CI:** three such reds occurred, all on the earlier three-draw entry. The first was on the first CI run of meaning search: "Do any GitHub workflows deploy directly to a database?" passed 1 of 3, a question that had passed 10 of 11 runs before and called no search ([meaning search](eval/experiments/2026-10-12-meaning-search.md)). The other two are the documentation-only reds above.
+- **Rule 1, in a local run** (not in CI, so not in the public record): a three-trial run of the same agent on 12 Oct scored 24, 25, 25, exactly the floor of 74 passes the 12 Oct baseline set. One fewer pass in any trial would have failed it.
 
 The gate failing a real change is shown by closed pull request #2, a deliberate regression (the ids emptied) that went red with 2 passes on the earlier one-run gate. The three rules are covered by `eval/baseline.test.ts`.
 
@@ -271,7 +285,7 @@ The gate failing a real change is shown by closed pull request #2, a deliberate 
 - **The gate** checks every change against the baseline, the benchmark declared working.
 - **`--accept`** re-declares the baseline, in its own commit, after a person has read the run: for a gain worth protecting, or for a red run shipped on purpose, the commit signing the trade.
 
-Never after a neutral change: retaken after every change, a solid question that slips to two of three loses its protection, and the next change can lose it entirely within rule 1's tolerance, green both times. The rule was tightened to this once the three-trial gate made the ratchet visible. Meaning search shipped under it, with no accept (commit `0f202de`).
+Never after a neutral change: retaken after every change, a solid question that slips to two of three loses its protection, and the next change can lose it entirely within rule 1's tolerance, green both times. The rule was tightened to this once the three-trial gate made the ratchet visible. Meaning search shipped under it, with no accept (commit `0f202de`). The one retake since (commit `8bf30c0`) came from a change to the gate: the solid set's new entry rule, which the old baseline's format could not express.
 
 **Sources.** The gate draws on Anthropic's [Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) and Evan Miller's [Adding Error Bars to Evals](https://arxiv.org/abs/2411.00640) for the pattern: several trials per question, the spread reported. It compares unpaired means, which is simpler and weaker than Miller's paired per-question differences.
 
@@ -297,13 +311,15 @@ The storefront miss could be won by a convention line written for that one quest
 The README names two traps among the questions ([README § Evaluation Harness](README.md#evaluation-harness) and the notes under it): some point one way in the descriptions and another in the graph, and at least one has an empty answer.
 
 - **Descriptions against the graph:** "What should I inspect if fulfillment jobs are backing up?" is one. The instances described as fulfillment workers have no permission on the queues described as fulfillment work; four instances described as product-information hosts do. The key takes the queues from their descriptions and the instances from the graph ([F23](docs/facts.md#f23-how-the-key-reads-a-business-area-by-the-resources-own-description-across-environments)). The agent lists the workers, says in its prose that they cannot reach those queues, and fails on exact match: the second miss above, 0 of 3 in the baseline and in every local run of the shipped prompt. The conventions already say to follow the graph from the resource; why the agent does not here is a hypothesis, not a measurement: the question names an area, so the area rule fires first and the agent never starts from the queues.
-- **Empty answers:** two questions expect none, "Do any GitHub workflows deploy directly to a database?" and "Can any dev compute instance reach production storage?" (`eval/expected.generated.json`). The answer contract asks for an empty `ids` with what was checked in the prose, which passes; an answer with no `final_answer` call fails, because no answer is not an answer of "none". Both passed all three baseline trials; the workflows question still wobbles, as below.
+- **Empty answers:** two questions expect none, "Do any GitHub workflows deploy directly to a database?" and "Can any dev compute instance reach production storage?" (`eval/expected.generated.json`). The answer contract asks for an empty `ids` with what was checked in the prose, which passes; an answer with no `final_answer` call fails, because no answer is not an answer of "none". Both passed all six draws of the baseline's accept; the workflows question still wobbles, as below.
 
 Three questions wobble, each by naming the right resources in the prose and putting one too many or one too few in `ids`:
 
 - **"What is the compute stack in my dev env?"** passed about four runs in ten on the shipped prompt when the baseline was taken, and 0 of 3 in it (commit `268529c`). The misses leave out the dev load balancer and its target groups.
 - **"Which repository's code ends up on i-ecomm-dev-02?"** passed 10 of 11 runs on the earlier prompt ([F24](docs/facts.md#f24-four-questions-failed-on-every-run-of-prompt-1f77e706-and-four-more-on-some-runs)), 2 of 3 at accept, and 0 of 3 in the local run that sat on rule 1's floor, each time adding the deploy workflow.
-- **"Do any GitHub workflows deploy directly to a database?"** is in the solid set at three of three, yet it failed 2 of 3 trials in meaning search's first CI run and 2 of 7 local trials of the same agent on 12 Oct after the merge. In both local failures the prose answered no, correctly, naming the workflows it checked; the slip is in `ids`, where it listed the deploy workflows it had ruled out, against a key that expects none. The solid set is a sample of three, not a guarantee.
+- **"Do any GitHub workflows deploy directly to a database?"** is in the solid set, having passed all six draws of the 13 Oct accept, yet it failed 2 of 3 trials in meaning search's first CI run, 2 of 7 local trials of the same agent on 12 Oct after the merge, and 2 of 3 again in [CI run 38319345402](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38319345402) on 13 Oct. In both local failures the prose answered no, correctly, naming the workflows it checked; the slip is in `ids`, where it listed the deploy workflows it had ruled out, against a key that expects none. The two 13 Oct CI failures listed the eight deploy workflows they had checked in the same way. The solid set is a sample of six, not a guarantee.
+
+Two more questions have slipped in a single run since the 12 Oct baseline: "Which instances can connect to rds-commerce-prod-4?" passed 2 of 3 at the 13 Oct accept (one trial added two instances) and left the solid set; "Which instances would a deploy to the auto scaling group hit?" passed 1 of 3 in [CI run 38314893054](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38314893054) and 6 of 6 at the accept.
 
 The thirty questions cannot test follow-up turns or adversarial input. With three readings taken from the key, the score is also partly fitted to it.
 
@@ -318,7 +334,7 @@ What is not ready for production, and what was planned and not built:
   - bounds each turn by a 120-second deadline, 16,000 output tokens per model call and a 30-second query timeout, and the chat never offers Opus;
   - keeps conversations in memory, so they are lost on restart (a forgotten one answers 404), and the thread id is the only key to one;
   - checks the graph at startup only.
-- **The false-red figures rest on three draws per question.** `npm run simulate-gate` reads each question's pass rate from the committed baseline, so a question at 3 of 3 is modelled as never failing and the rule 2 figure is a floor; "Do any GitHub workflows deploy directly to a database?" was such a question and still broke rule 2 in CI. Pooled over the eleven local eval records of the shipped prompt (`--runs`; not committed, and spanning the agent before and after meaning search), the same command gives about one run in five red and one in fourteen red twice.
+- **The false-red figures rest on at most six draws per question.** `npm run simulate-gate` reads each question's pass rate from the committed baseline, so a question at 6 of 6 is modelled as never failing and the rule 2 figure is a floor; both questions that broke rule 2 in CI on 13 Oct are such questions. Pooled over the thirteen local eval records of the shipped prompt (`--runs`; not committed, and spanning the agent before and after meaning search), the same command gives about one run in seven red and one in twenty-four red twice with the six-draw entry, against one in five and one in fifteen with three.
 - **No failing trace is linked.** Run records are not committed and a CI run's artifact expires, so the error analysis above is told through the experiment files, with no trace a reader can open.
 - **CI** runs a pull request against GitHub's merge commit, so its record names a temporary commit; runs on `main` record real ones. A fork's pull request gets no API key and ends INCOMPLETE.
 - **Local embeddings** avoid a second key at the price of about 290 MB of native packages.
@@ -348,7 +364,7 @@ Two loops first: one that improves the agent from its failing traces, one that g
 
 4. **The gate's statistics.** Three changes to what the gate can see:
    - **A paired comparison.** Compare each question with its own baseline count and count the questions that flipped each way, instead of comparing two means. A hard question is hard on both sides, so question-to-question difficulty cancels and the same ninety runs detect a smaller change; this is Evan Miller's recommendation, cited in the gate section.
-   - **A stricter entry to the solid set.** Done: a question earns it by passing six accept draws instead of three, the three trials and then up to three more runs alone. For a question that passes 75% of the time, with independent trials, the chance of entering by luck falls from 42% to 18% (0.75³ against 0.75⁶); five trials at one accept, the option decision 8 deferred, would give 24%. The second round runs only the questions that passed the first, each stopped at its first failure, so a stable question costs at most three more runs and an unstable one stops early: at most 75 runs, about 22 cents, for 25 entrants at 0.3 cents a run. The mean and the cost still come from the three full trials. Six draws do not end lucky entries (a question at 85% still enters about four times in ten, 0.85⁶ ≈ 0.38), so the paired comparison above remains the larger step, and the padding behind the two reds that prompted this change is the agent's to fix ([the gate](#the-gate-what-it-guarantees-and-what-it-does-not)).
+   - **A stricter entry to the solid set.** Done: a question earns it by passing six accept draws instead of three, the three trials and then up to three more runs alone. For a question that passes 75% of the time, with independent trials, the chance of entering by luck falls from 42% to 18% (0.75³ against 0.75⁶); five trials at one accept, the option decision 8 deferred, would give 24%. The second round runs only the questions that passed the first, each stopped at its first failure, so a stable question costs at most three more runs and an unstable one stops early: at most 75 runs, about 22 cents, for 25 entrants at 0.3 cents a run. The mean and the cost still come from the three full trials. The 13 Oct accept ran it: 24 entrants, all passing six of six, 72 runs at 18.2 cents; on that baseline the simulated share of runs red under rule 2 fell from 14.8% to 4.5% ([the experiment](eval/experiments/2026-10-13-solid-six.md)). Six draws do not end lucky entries (a question at 85% still enters about four times in ten, 0.85⁶ ≈ 0.38), so the paired comparison above remains the larger step, and the padding behind the two reds that prompted this change is the agent's to fix ([the gate](#the-gate-what-it-guarantees-and-what-it-does-not)).
    - **The cost rule over the solid questions only.** In the baseline's 90 runs (12 Oct, prompt `1d555744`, from the local run records), the five questions outside the solid set cost about 0.48 cents each, against 0.26 for the solid ones. Rule 3 over all thirty therefore mixes a change in what answers cost with a change in which questions pass, which rules 1 and 2 already judge; over the solid set it asks only whether the same answers got more expensive, with the others' cost reported beside it.
 
 5. **Smaller changes**, one line each, each measured on the same eval:
@@ -364,7 +380,7 @@ Written down as the work went, published here at the end: the context, the choic
 The full record, each decision with its rejected options, its evidence and what would change it, plus the decisions implied here and stated nowhere else, is in [`docs/decisions.md`](docs/decisions.md).
 
 1. **[One package, one entry point.](docs/decisions.md#why-one-package-with-one-entry-point-shared-by-the-chat-and-the-eval)** An eval protects production only if it scores what production runs. Rejected: a multi-package workspace, worth it only with several teams or deployables.
-2. **[One generic read-only query tool first.](docs/decisions.md#why-one-generic-cypher-tool-and-not-a-tool-per-question-shape)** The model writes working Cypher (2, 2 and 6 errors in 168 to 178 tool calls across the baseline's three trials), and no failure so far asks for a specific tool. Rejected:
+2. **[One generic read-only query tool first.](docs/decisions.md#why-one-generic-cypher-tool-and-not-a-tool-per-question-shape)** The model writes working Cypher (4, 0 and 5 errors in 160 to 169 tool calls across the baseline's three trials), and no failure so far asks for a specific tool. Rejected:
    - specific tools first, which cover only what was foreseen
    - a keyword filter as the guard, which is brittle
    - a read-only user, which Community does not offer
