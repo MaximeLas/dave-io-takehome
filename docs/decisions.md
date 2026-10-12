@@ -52,7 +52,7 @@ Numbers come from committed files only: the experiment files in [`eval/experimen
 - A keyword filter as the read-only guard: writes can hide in procedure calls, and legitimate text contains the keywords.
 - A read-only database user: the Community edition the fixture ships has no roles.
 
-**Evidence.** The baseline's three trials (prompt `1d555744`) made 168 to 178 tool calls each, with 2, 2 and 6 Cypher errors. On the first scored runs (commit `e4ddc69`), mean recall was near 90%: the failures were in what the answers claimed, not in what the queries found. None of the failures diagnosed in the experiment files since was a query the model could not write.
+**Evidence.** The baseline's three trials (13 Oct, prompt `1d555744`) made 160 to 169 tool calls each, with 4, 0 and 5 Cypher errors. On the first scored runs (commit `e4ddc69`), mean recall was near 90%: the failures were in what the answers claimed, not in what the queries found. None of the failures diagnosed in the experiment files since was a query the model could not write.
 
 **What would change it.** Traces showing one query shape written wrong again and again, or schema discovery dominating the turns: then a specific tool beside the generic one, or the schema in the prompt, each measured. A much larger graph would revisit the cap and the timeout.
 
@@ -144,7 +144,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 
 **Revised.** The first tool description invited wider searches, and the model asked for 15 to 80 descriptions up front; the revised one asks for the default first.
 
-**Evidence on the eval.** 25, 25, 26 passes at $0.091 a trial, against the baseline's 25, 26, 26 at $0.089, as predicted beforehand. With no line in the prompt about it, search was called on the same 8 questions in both local runs, each naming a purpose.
+**Evidence on the eval.** 25, 25, 26 passes at $0.091 a trial, against the 12 Oct baseline's 25, 26, 26 at $0.089, as predicted beforehand. With no line in the prompt about it, search was called on the same 8 questions in both local runs, each naming a purpose.
 
 **What would change it.** A held-out reworded set showing whether search turns into correct answers on unfamiliar wording.
 
@@ -239,19 +239,22 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 
 ### Why three trials against a three-trial baseline, and not one run, or five?
 
-**Choice.** `npm run eval` runs every question three times and holds three rules against a three-trial baseline (`eval/baseline.ts`): on the mean pass count, on every question that passed all three baseline trials (it must pass two of three), and on the mean cost. Each allowance is the spread of the three accept trials, floored at one pass and 5% of the cost.
+**Choice.** `npm run eval` runs every question three times and holds three rules against a three-trial baseline (`eval/baseline.ts`): on the mean pass count, on every question in the solid set (it must pass two of three), and on the mean cost. Each allowance is the spread of the three accept trials, floored at one pass and 5% of the cost. The solid set is earned at accept over six draws: the three trials, then a second round in which each question that passed them all runs up to three more times alone, stopped at its first failure.
 
 **Why not one run.** One run against one stored run needed a wide tolerance: the first baseline (commit `2520733`) failed below 22 while the agent usually scored 25, letting three working questions go, and cost went ungated.
 
-**Why not five.** About 45 cents per pull request instead of 27, for a standard error about 1.3 times smaller. What remains is a question entering the solid set by three lucky passes (42% for one that passes 75% of the time), which a second accept round fixes more cheaply ([item 4 of the next steps](../SOLUTION.md#how-i-would-take-this-further)).
+**Why not five.** About 45 cents per pull request instead of 27, for a standard error about 1.3 times smaller. What remained after three trials was a question entering the solid set by three lucky passes (42% for one that passes 75% of the time), and a second accept round fixes that more cheaply: it is paid once per accept, not on every pull request.
 
 **Rejected.**
 
 - A cost rule that relaxes when the score rises: it needs an exchange rate between cents and questions.
+- Five trials at one accept for the solid set: 24% entry by luck for a question at 75% (0.75⁵), against 18% for the second round, which also costs nothing extra for a question that fails early.
 
-**Evidence.** Baseline (commit `268529c`, prompt `1d555744`): 25, 26, 26 passes, tolerance 1; 8.9 cents a trial, margin 0.73 cents. Unchanged code turns red about one run in nine, and red again on one re-run about one in thirty ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-thirty), `npm run simulate-gate`).
+**Evidence.** Baseline (commit `8bf30c0`, taken on `b0fb213`, prompt `1d555744`): 24, 26, 26 passes, tolerance 2; 8.6 cents a trial, margin 1.06 cents; 24 solid questions, all 24 entrants passing the second round's three runs (72 runs, 18.2 cents). Simulated on that baseline, rule 2 turns unchanged code red 4.5% of the time against 14.8% under the one-round entry, and the gate as a whole about one run in nine against one in five; red again on one re-run about one in twenty-five ([F27](facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-five), `npm run simulate-gate`, [the experiment](../eval/experiments/2026-10-13-solid-six.md)). The previous baseline (commit `268529c`), under the one-round entry, was 25, 26, 26 with tolerance 1, 8.9 cents with margin 0.73, 25 solid questions.
 
 **Revised.** The first estimate said one in a hundred after a re-run: it treated the re-run as independent, when both runs face the same solid set.
+
+**Revised.** The first version of rule 2 held every question that passed the three accept trials. Three draws proved too cheap an entry: on 13 Oct a pull request that changed only documentation, so the agent was identical to `main`'s, went red under rule 2 twice before merging, each time on a different solid question. In [CI run 38314893054](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38314893054) "Which instances would a deploy to the auto scaling group hit?" passed 1 of 3; in [run 38319345402](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38319345402) "Do any GitHub workflows deploy directly to a database?" passed 1 of 3, two of its trials listing the eight deploy workflows they had checked as the answer to a question whose answer is none. Each re-run went green (the second at 25, 25, 26). The solid set is now earned over six draws, which cuts a lucky entry for a question at 75% from 42% to 18%. Six draws reduce lucky entries without ending them: a question at 85% still enters about four times in ten (0.85⁶ ≈ 0.38). The direct fix for the padding on empty-answer questions is a change to the agent, for the improvement loop, not to the gate.
 
 **What would change it.** Reds on unchanged code well above that rate, or the paired per-question comparison of the next steps.
 
@@ -267,7 +270,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 - A retake for cost headroom: it resets the margin and hides the cumulative drift a later red run would expose.
 - A scheduled retake: a calendar in place of a reason.
 
-**Evidence.** Meaning search shipped under the corrected rule with no accept: 25, 25, 26 at $0.091 a trial, against the baseline's 25, 26, 26 at $0.089 and its 9.7-cent ceiling ([meaning search](../eval/experiments/2026-10-12-meaning-search.md)).
+**Evidence.** Meaning search shipped under the corrected rule with no accept: 25, 25, 26 at $0.091 a trial, against the baseline's 25, 26, 26 at $0.089 and its 9.7-cent ceiling ([meaning search](../eval/experiments/2026-10-12-meaning-search.md)). The next retake (commit `8bf30c0`) came from a change to the gate, not to the agent: the solid set is now earned over two accept rounds, and the gate refuses a baseline in the one-round format ([the experiment](../eval/experiments/2026-10-13-solid-six.md)).
 
 **What would change it.** A provider-side change under the same model id shifting every run, which calls for re-declaring the benchmark with the cause stated.
 

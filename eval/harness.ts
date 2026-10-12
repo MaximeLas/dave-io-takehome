@@ -8,6 +8,10 @@
 // side each took about 90 s, as one alone does. Ninety runs instead of thirty also triple the chance
 // that an API error makes the run incomplete, which the model client's own retries keep rare.
 //
+// An accepting run adds a second round (`runSecondRound`): each question that passed every trial
+// runs again alone, in sequence, stopped at its first failure, so the solid set is earned over six
+// draws (eval/baseline.ts gives the reasoning). Different questions run side by side.
+//
 // Infrastructure failures are kept apart from the agent's failures. The graph is checked
 // before any model token is spent, because the query tool returns a database outage to the
 // model as text (by design, so it can repair its own queries), which would otherwise turn a
@@ -19,8 +23,9 @@ import { PROMPT_VERSION } from "../src/agent/prompt.js";
 import { saveRun } from "../src/agent/record.js";
 import { codeVersion, runAgent } from "../src/agent/run.js";
 import { assertGraphReady } from "../src/graph/health.js";
+import { SECOND_ROUND_RUNS, secondRoundEntrants } from "./baseline.js";
 import { loadQuestions, type Question } from "./questions.js";
-import { assemble, scoreRun, type EvalRun, type QuestionResult } from "./record.js";
+import { assemble, scoreRun, type EvalRun, type QuestionResult, type SecondRound } from "./record.js";
 import { applyOverlay, loadAnswerKey, loadKeyOverlay } from "./score.js";
 
 /** What one eval run varies; anything left out takes the shipped default. */
@@ -45,10 +50,7 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   const effort = options.effort ?? DEFAULT_EFFORT;
   const trials = options.trials ?? 1;
   if (!Number.isInteger(trials) || trials < 1) throw new Error(`The number of trials must be a whole number of at least 1, not ${trials}.`);
-  const key = await loadAnswerKey();
-  const overlay = await loadKeyOverlay();
-  // Only the questions the overlay names get an amended score; checks the overlay against the key before any token is spent.
-  const amended = applyOverlay(key, overlay);
+  const scorer = await loadScorer();
   const all = await loadQuestions();
   const questions = options.only ? all.filter((q) => options.only!.includes(q.id)) : all;
   const unknown = (options.only ?? []).filter((id) => !all.some((q) => q.id === id));
@@ -60,7 +62,7 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   const queue = Array.from({ length: trials }, (_, t) => questions.map((q, i) => ({ t, i, q }))).flat();
   const worker = async () => {
     for (let job = queue.shift(); job; job = queue.shift()) {
-      const result = await runOne(job.q, key[job.q.id] ?? [], job.q.id in overlay ? amended[job.q.id] : undefined, model, effort);
+      const result = await scorer(job.q, model, effort);
       results[job.t]![job.i] = result;
       options.onQuestion?.(result, job.t + 1);
     }
@@ -80,6 +82,63 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
     full: questions.length === all.length,
     ...assemble(results),
   };
+}
+
+/** Runs one question through the agent and scores it; the key and overlay are loaded once, and checked against each other before any token is spent. */
+async function loadScorer(): Promise<(question: Question, model: ModelId, effort: Effort) => Promise<QuestionResult>> {
+  const key = await loadAnswerKey();
+  const overlay = await loadKeyOverlay();
+  // Only the questions the overlay names get an amended score.
+  const amended = applyOverlay(key, overlay);
+  return (q, model, effort) => runOne(q, key[q.id] ?? [], q.id in overlay ? amended[q.id] : undefined, model, effort);
+}
+
+/**
+ * The second accept round on a full run: each question that passed every trial runs again, up to
+ * `runsPerQuestion` times in sequence, stopped at its first run that does not pass (a failure, or
+ * an error, which the round counts so the accept can refuse it). Questions below every trial never
+ * run. `runQuestion` is the agent in production and a stub in the tests.
+ */
+export async function playSecondRound(
+  run: EvalRun,
+  runQuestion: (id: string) => Promise<QuestionResult>,
+  { runsPerQuestion = SECOND_ROUND_RUNS, workers = WORKERS_PER_TRIAL * 3, onRun }: { runsPerQuestion?: number; workers?: number; onRun?: (result: QuestionResult, attempt: number) => void } = {},
+): Promise<SecondRound> {
+  const ids = secondRoundEntrants(run);
+  const rounds = new Map<string, QuestionResult[]>();
+  const queue = [...ids];
+  const worker = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      const results: QuestionResult[] = [];
+      while (results.length < runsPerQuestion && results.every((r) => r.status === "pass")) {
+        const result = await runQuestion(id);
+        results.push(result);
+        onRun?.(result, results.length);
+      }
+      rounds.set(id, results);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(workers, ids.length) }, worker));
+  const questions = ids.map((id) => {
+    const results = rounds.get(id)!;
+    return { id, passes: results.filter((r) => r.status === "pass").length, results };
+  });
+  const all = questions.flatMap((q) => q.results);
+  return {
+    runsPerQuestion,
+    questions,
+    runs: all.length,
+    costUsd: all.reduce((acc, r) => acc + (r.diagnostics?.costUsd ?? 0), 0),
+    errors: all.filter((r) => r.status === "error").length,
+  };
+}
+
+/** Runs the second accept round through the agent, on the model and effort of the run it follows. */
+export async function runSecondRound(run: EvalRun, options: { onRun?: (result: QuestionResult, attempt: number) => void } = {}): Promise<SecondRound> {
+  const scorer = await loadScorer();
+  const questions = new Map((await loadQuestions()).map((q) => [q.id, q]));
+  await assertGraphReady();
+  return playSecondRound(run, (id) => scorer(questions.get(id)!, run.model as ModelId, run.effort as Effort), options);
 }
 
 async function runOne(question: Question, expectedIds: string[], amendedIds: string[] | undefined, model: ModelId, effort: Effort): Promise<QuestionResult> {

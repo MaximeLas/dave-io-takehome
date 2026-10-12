@@ -56,7 +56,7 @@ One line per fact, linked to its entry. The id is the handle: cite it, or search
 
 **[The eval gate](#the-eval-gate)**
 
-- **F27** [On unchanged code the gate is red about one run in nine, and red twice about one in thirty](#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-thirty): simulated from the committed baseline; a floor, since its rates are three draws per question
+- **F27** [On unchanged code the gate is red about one run in nine, and red twice about one in twenty-five](#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-five): simulated from the committed baseline; the six-draw entry cuts rule 2's share from 14.8% to 4.5%; a floor, since its rates are at most six draws per question
 
 ## deepagents
 
@@ -291,10 +291,10 @@ On the configuration shipped until the business-area conventions (Haiku 5.5, eff
 
 What is known about the gate's own behaviour (`eval/baseline.ts`), as opposed to the agent it judges.
 
-### F27. On unchanged code the gate is red about one run in nine, and red twice about one in thirty
+### F27. On unchanged code the gate is red about one run in nine, and red twice about one in twenty-five
 
-Judged by the three rules against the committed baseline (Haiku 5.5, effort high, accepted on `0c204d8`), a later three-trial run of the same agent is red 11.0% of the time: rule 2 7.7%, all of it "Which repository's code ends up on i-ecomm-dev-02?", the one question at 2 of 3 entering the solid set by luck and then failing two trials; rule 3 3.6%; rule 1 never. A red run is red again on one re-run 3.3% of the time, not the square of 11%, because the re-run meets the same baseline: a wobbly question that entered the solid set is still in it. The model behind the figures takes each question's pass rate as its passes out of three in the baseline, so a question at 3 of 3 never fails in the simulation and the rule 2 figure is a floor; the cost of a trial is a normal draw with the mean and deviation of the baseline's three costs. Each figure carries a Monte Carlo standard error of about 0.1 points.
+Judged by the three rules against the committed baseline (Haiku 5.5, effort high, accepted on `b0fb213` with the two-round accept), a later three-trial run of the same agent is red 11.1% of the time: rule 2 4.5%, from the two questions at 2 of 3 ("Which repository's code ends up on i-ecomm-dev-02?" and "Which instances can connect to rds-commerce-prod-4?") passing all six accept draws by luck and then failing two trials; rule 3 6.1%; rule 1 1.4%. A red run is red again on one re-run 3.7% of the time (3.9% with seed 2), not the square of 11%, because the re-run meets the same baseline: a wobbly question that entered the solid set is still in it. On the same input with the one-round entry the gate used before (`--rounds 1`, solid after the three trials alone), rule 2 is red 14.8%, any rule 19.9% and red twice 7.5%: the second round cuts rule 2's share to under a third, and rule 3 is now the largest source, from the deviation of the baseline's three costs (0.61c). The model behind the figures takes each question's pass rate as its passes out of its draws in the baseline (the three trials and its second-round runs), so a question at 6 of 6 never fails in the simulation and the rule 2 figure is a floor; the cost of a trial is a normal draw with the mean and deviation of the baseline's three costs. Each figure carries a Monte Carlo standard error of about 0.1 points.
 
-- Source: `eval/baselines/claude-haiku-5-5.high.json`; `eval/simulate.ts`, which judges each simulated run with the gate's own `baselineFrom()` and `gate()`
-- Evidence: `npm run simulate-gate` (100,000 pairs, seed 1) prints rule 1 0.0%, rule 2 7.7%, rule 3 3.6%, any rule 11.0%, red twice 3.3%; `npm run simulate-gate -- --seed 2` gives the same figures within 0.1 points; `npm test` checks the one-wobbly-question case against the hand calculation (0.296 × 0.259 ≈ 7.7%)
+- Source: `eval/baselines/claude-haiku-5-5.high.json` (commit `8bf30c0`); `eval/simulate.ts`, which judges each simulated run with the gate's own `baselineFrom()` and `gate()`
+- Evidence: `npm run simulate-gate` (100,000 pairs, seed 1) prints rule 1 1.4%, rule 2 4.5%, rule 3 6.1%, any rule 11.1%, red twice 3.7%; `npm run simulate-gate -- --rounds 1` prints rule 1 1.5%, rule 2 14.8%, rule 3 5.9%, any rule 19.9%, red twice 7.5%; `--seed 2` gives the same figures within 0.2 points; `npm test` checks a question at 75% against the hand calculation under each entry rule (enters 0.75³ = 42.2% or 0.75⁶ = 17.8% of the time)
 - Checked: 2026-10-13
