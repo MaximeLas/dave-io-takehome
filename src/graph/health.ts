@@ -17,8 +17,11 @@ export const EXPECTED_RELATIONSHIPS = 579;
 export async function assertGraphReady(): Promise<{ nodes: number; relationships: number }> {
   let nodes = 0;
   let relationships = 0;
+  // Creating the driver reads the settings but does not connect, so a missing setting fails
+  // here with its own fix, and only a failed query reads as an unreachable database.
+  const driver = getDriver();
   try {
-    const { records } = await getDriver().executeQuery(
+    const { records } = await driver.executeQuery(
       "CALL { MATCH (n) RETURN count(n) AS nodes } CALL { MATCH ()-[r]->() RETURN count(r) AS rels } RETURN nodes, rels",
     );
     nodes = Number(records[0]?.get("nodes") ?? 0);

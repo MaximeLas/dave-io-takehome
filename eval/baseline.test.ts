@@ -105,7 +105,7 @@ test("rule 3: the mean cost per trial may rise by the margin and no further", ()
   assert.equal(dear.verdict, "regression");
   assert.ok(!dear.cost.held);
   assert.ok(dear.average.held && dear.solid.held);
-  assert.match(gate(run(all, { cost: 0.0106 }), baseline, false).line, /^REGRESSION: rule 3 \(cost: \$0\.106 per trial above the ceiling of \$0\.105\)$/);
+  assert.match(gate(run(all, { cost: 0.0106 }), baseline, false).line, /^REGRESSION: rule 3 \(cost: 10\.60c per trial above the ceiling of 10\.50c\)$/);
 });
 
 test("a question erroring in one trial of three makes the run incomplete, whatever the rules say", () => {
@@ -120,12 +120,14 @@ test("a question erroring in one trial of three makes the run incomplete, whatev
 });
 
 test("the gate compares only a full run with a baseline of its own trial count", () => {
-  // One trial against a three-trial baseline: not compared, and the build cannot pass on it.
+  // One trial against a three-trial baseline: a quick read, reported and not compared, like a subset.
   const one = run({ a: "P", b: "P", c: "P", d: "P", e: "P", f: "P", g: "P", h: "F", i: "F", j: "F" });
   assert.throws(() => compare(one, baseline), /1 trial\(s\) cannot be compared with a baseline of 3/);
   const mismatch = gate(one, baseline, false);
-  assert.deepEqual([mismatch.exit, mismatch.comparison], [EXIT.unmeasured, null]);
-  assert.match(mismatch.line, /^INCOMPLETE: not compared: the baseline was taken on 3 trials and this run has 1/);
+  assert.deepEqual([mismatch.exit, mismatch.comparison], [EXIT.ok, null]);
+  assert.equal(mismatch.line, "REPORTED only: 1 trial; the gate compares a 3-trial run with the baseline (npm run eval with no flags)");
+  // A quick read with an error is still incomplete: the error says something is broken.
+  assert.equal(gate(run({ a: "E" }), baseline, false).exit, EXIT.unmeasured);
   // No baseline: incomplete, unless this run is being accepted as the first.
   assert.equal(gate(accepted, null, false).exit, EXIT.unmeasured);
   assert.match(gate(accepted, null, false).line, /^INCOMPLETE: no baseline for m at effort high/);
@@ -138,7 +140,7 @@ test("while accepting, the run is compared with the baseline it replaces and nev
   const worse = run({ a: "PPP", b: "PPP", c: "PPP", d: "PPP", e: "PPP", f: "PPF", g: "FPP", h: "FFF", i: "FFF", j: "FFF" });
   const g = gate(worse, baseline, true);
   assert.equal(g.exit, EXIT.ok);
-  assert.match(g.line, /^against the baseline being replaced: REGRESSION: rule 1/);
+  assert.match(g.line, /^ACCEPTING: against the baseline being replaced, REGRESSION: rule 1/);
 });
 
 test("a baseline in the old one-run format is refused, and a missing one reads as none", async () => {

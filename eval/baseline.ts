@@ -19,7 +19,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { Comparison, EvalRun, EvalTotals } from "./record.js";
+import { USAGE_EXIT } from "../src/cli.js";
+import { cents, type Comparison, type EvalRun, type EvalTotals } from "./record.js";
 
 /** The committed scores for one model and effort, taken over `trials` runs of every question. */
 export interface Baseline {
@@ -133,7 +134,7 @@ export function compare(run: EvalRun, baseline: Baseline): Comparison {
 }
 
 /** The process exit codes, read by CI: the build ships only on 0. */
-export const EXIT = { ok: 0, regression: 1, unmeasured: 2, usage: 3 } as const;
+export const EXIT = { ok: 0, regression: 1, unmeasured: 2, usage: USAGE_EXIT } as const;
 
 /** What the gate concludes about an eval run: the comparison when there is one, the exit code, and the line the report ends on. */
 export interface GateVerdict {
@@ -144,31 +145,33 @@ export interface GateVerdict {
 
 /**
  * The gate's decision on a run, given the committed baseline of its model and effort (null when
- * none). Only a full, error-free run with the baseline's trial count is compared. A full run that
- * cannot be compared cannot vouch for the agent and exits `unmeasured`; a subset run is reported
- * only. While accepting, the comparison is with the baseline being replaced and never fails the run.
+ * none). Only a full, error-free run with the baseline's trial count is compared. A full run
+ * with no baseline cannot vouch for the agent and exits `unmeasured`; a subset run, or a quick
+ * read on another number of trials, is reported only, since the person running it asked for a
+ * read rather than a verdict (CI runs the baseline's count). While accepting, the comparison is
+ * with the baseline being replaced and never fails the run.
  */
 export function gate(run: EvalRun, baseline: Baseline | null, accepting: boolean): GateVerdict {
   const unmeasured = (reason: string): GateVerdict => ({ comparison: null, exit: EXIT.unmeasured, line: `INCOMPLETE: ${reason}` });
   if (run.summary.errors > 0) return unmeasured(`${run.summary.errors} question run(s) threw (see the ERROR lines); the run cannot vouch for the agent`);
-  if (!run.full) return { comparison: null, exit: EXIT.ok, line: "subset run: reported, not compared with the baseline" };
+  if (!run.full) return { comparison: null, exit: EXIT.ok, line: "REPORTED only: a subset of the questions; the gate compares a full run with the baseline (npm run eval with no flags)" };
   const none = `no baseline for ${run.model} at effort ${run.effort}`;
-  if (!baseline && accepting) return { comparison: null, exit: EXIT.ok, line: `${none}; this run becomes the first` };
+  if (!baseline && accepting) return { comparison: null, exit: EXIT.ok, line: `ACCEPTING: ${none}; this run becomes the first` };
   if (!baseline) return unmeasured(`${none}; the build cannot pass without one (declare one with --accept)`);
   if (baseline.trials !== run.summary.trials) {
-    return unmeasured(`not compared: the baseline was taken on ${baseline.trials} trials and this run has ${run.summary.trials}; the gate needs --trials ${baseline.trials}`);
+    const trials = `${run.summary.trials} trial${run.summary.trials === 1 ? "" : "s"}`;
+    return { comparison: null, exit: EXIT.ok, line: `REPORTED only: ${trials}; the gate compares a ${baseline.trials}-trial run with the baseline (npm run eval with no flags)` };
   }
 
   const comparison = compare(run, baseline);
-  const usd = (x: number) => `$${x.toFixed(3)}`;
   const fmt = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
   const failed = [
     comparison.average.held ? "" : `rule 1 (average: mean ${fmt(comparison.average.value)} below the floor of ${fmt(comparison.average.limit)})`,
     comparison.solid.held ? "" : `rule 2 (solid set: ${comparison.solid.broken.join(", ")} passed fewer than ${baseline.trials - 1} of ${baseline.trials})`,
-    comparison.cost.held ? "" : `rule 3 (cost: ${usd(comparison.cost.value)} per trial above the ceiling of ${usd(comparison.cost.limit)})`,
+    comparison.cost.held ? "" : `rule 3 (cost: ${cents(comparison.cost.value, 2)} per trial above the ceiling of ${cents(comparison.cost.limit, 2)})`,
   ].filter(Boolean);
   const verdict = failed.length === 0 ? "OK: all three rules held" : `REGRESSION: ${failed.join("; ")}`;
-  if (accepting) return { comparison, exit: EXIT.ok, line: `against the baseline being replaced: ${verdict}` };
+  if (accepting) return { comparison, exit: EXIT.ok, line: `ACCEPTING: against the baseline being replaced, ${verdict}` };
   return { comparison, exit: EXIT[comparison.verdict], line: verdict };
 }
 
