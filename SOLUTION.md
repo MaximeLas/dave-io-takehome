@@ -13,14 +13,15 @@ How the assignment in `README.md` was answered: the agent, how it is measured, w
 **Contents**
 
 1. [What this is](#what-this-is): what runs, and what `npm run eval` prints
-2. [How the agent works](#how-the-agent-works): the tools, the conventions, the answer, the model
-3. [Retrieval](#retrieval-the-graph-first-meaning-search-beside-it): the vector index and what it was measured against
-4. [The eval, as error analysis](#the-eval-as-error-analysis): the scoring, the four changes, how much rests on the key
-5. [The gate](#the-gate-what-it-guarantees-and-what-it-does-not): the three rules, the allowances, unlucky draws, gate versus accept
-6. [Known misses](#known-misses)
-7. [Current limitations](#current-limitations)
-8. [How I would take this further](#how-i-would-take-this-further)
-9. [Decisions](#decisions)
+2. [How this was built](#how-this-was-built): the rules, the facts ledger, the experiment files, the fingerprint, where to read
+3. [How the agent works](#how-the-agent-works): the tools, the conventions, the answer, the model
+4. [Retrieval](#retrieval-the-graph-first-meaning-search-beside-it): the vector index and what it was measured against
+5. [The eval, as error analysis](#the-eval-as-error-analysis): the scoring, the metrics, the four changes, how much rests on the key
+6. [The gate](#the-gate-what-it-guarantees-and-what-it-does-not): the three rules, the allowances, unlucky draws, gate versus accept
+7. [Known misses](#known-misses): including the two traps the README names
+8. [Current limitations](#current-limitations)
+9. [How I would take this further](#how-i-would-take-this-further)
+10. [Decisions](#decisions)
 
 To run it (details in [`AGENTS.md` § Running it](AGENTS.md#running-it)):
 
@@ -77,6 +78,32 @@ REPORTED only: 1 trial; the gate compares a 3-trial run with the baseline (npm r
 ```
 
 A three-trial run also prints the baseline's count beside each row and a gate block, one line per rule opening with `held` or `FAILED`, and ends on `OK: all three rules held` or `REGRESSION:` with the rules that failed.
+
+## How this was built
+
+The code was written by Claude agents, under rules I set, reviewed and enforced. The rules are the public [`AGENTS.md`](AGENTS.md): where code goes, how a tool is written, how a change to the agent is measured, how a commit reads. The eval decided every change to what the agent answers: a change stayed when its runs, at least three per side, showed a gain, or no loss for a piece the assignment requires.
+
+Three records make that work checkable by someone who was not there:
+
+- **A facts ledger, [`docs/facts.md`](docs/facts.md).** The agent stack (`deepagents`, LangChain, LangGraph) changes every few days, so an API recalled from memory is often stale. Each entry is one fact about the libraries, the graph or the answer key, a command a reader re-runs to verify it, the date it was last checked, and a stable id. The `F` citations in this document resolve there.
+- **One experiment file per behavioural change, in [`eval/experiments/`](eval/experiments/README.md),** committed with the change: the failure pattern, the hypothesis, the runs before and after, what moved and what regressed. Its numbers are never edited afterwards; when later evidence overturns its reading, it gets one dated `Revised` line at the top ([`AGENTS.md` § Keeping these docs true](AGENTS.md#keeping-these-docs-true)).
+- **A fingerprint in every run record.** It hashes everything the model reads (the prompt, each tool's name, description and input schema, the model id and its settings), so two records with the same fingerprint ran the same agent, and a score that moves between two fingerprints has a named cause.
+
+Where to read, in order:
+
+1. [`src/agent/run.ts`](src/agent/run.ts): the one entry point the eval and the server both call, and the run record it writes.
+2. [`src/agent/prompt.ts`](src/agent/prompt.ts) and [`src/agent/conventions.ts`](src/agent/conventions.ts): the system prompt, and how the agent reads the words of a question on this estate.
+3. [`src/agent/agent.ts`](src/agent/agent.ts): the model, the effort and the `final_answer` shape, in one place.
+4. [`src/agent/tools.ts`](src/agent/tools.ts) and [`src/graph/query.ts`](src/graph/query.ts): the two tools, each described for a model that has never seen the system, and the read transaction, timeout and row cap behind every query.
+5. [`src/search/vector-index.ts`](src/search/vector-index.ts) and [`src/search/search.ts`](src/search/search.ts): the vector index on the nodes, and how a search is ranked and cut.
+6. [`eval/score.ts`](eval/score.ts): the grader, set arithmetic with no model and no database.
+7. [`eval/baseline.ts`](eval/baseline.ts): the baseline and the gate's three rules.
+8. [`eval/harness.ts`](eval/harness.ts): the questions through `runAgent`, three trials side by side, with infrastructure failures kept apart from wrong answers.
+9. [`scripts/eval.ts`](scripts/eval.ts): the report and the exit code CI reads.
+10. [`src/server/chat.service.ts`](src/server/chat.service.ts): one chat turn, on the same entry point.
+11. [`.github/workflows/eval.yml`](.github/workflows/eval.yml): the gate in CI.
+
+The method's limit is the eval's: it judges the agent on the thirty questions it was tuned against. What the agent still fails is in [Known misses](#known-misses); how it would score on questions it never saw is for the held-out set in [How I would take this further](#how-i-would-take-this-further) to answer.
 
 ## How the agent works
 
@@ -159,22 +186,35 @@ How a question is scored:
 - **Exact match:** a question passes when the asserted ids equal the key's exactly.
 - **Named ids are neutral:** ids the question itself names count neither way, since the key includes them in one of the ten questions that name a resource ([F21](docs/facts.md#f21-the-answer-key-is-generated-by-a-script-outside-this-repository)).
 - **Empty fails:** an empty answer never passes, because no answer is not an answer of "none".
-- **Reported, not gated:** recall, precision, tool calls, cost and duration.
 
 `npm test`, which CI runs first, checks the grader itself: the key scored against itself passes every question, an empty answer fails every one, and the gate returns each of its verdicts.
+
+**The metrics.** The README calls the key a reference, not the whole rubric, and asks what else is worth measuring. Three tiers:
+
+- **Gated today:** the pass count, by rules 1 and 2, and the cost per trial, by rule 3 ([the gate](#the-gate-what-it-guarantees-and-what-it-does-not)).
+- **Reported, not gated:**
+  - recall and precision, which say how a failing answer failed: an expected id missing, or one too many;
+  - empty answers, the runs that broke the answer contract;
+  - tool calls, Cypher errors and cut results (query results over the 100-row cap), which show how much work an answer took and how well its queries were written;
+  - duration.
+
+  Every run prints them; a three-trial run also prints the mean recall, tool calls, Cypher errors and empty answers beside the baseline's (`scripts/eval.ts`). They have earned their place: recall of about 90% against precision of 61 to 74% is what pointed to the first change below. A reported metric becomes a gate once it is steady across runs and has an agreed budget ([`AGENTS.md` § Scoring](AGENTS.md#scoring)).
+- **Not measured yet:** what the thirty cannot show. They are single turns of well-meant input in one wording, scored on `ids`, not on the prose the user reads. A held-out reworded set, a multi-turn set, an adversarial set and a judge for the prose would cover those (items 2 and 3 of [How I would take this further](#how-i-would-take-this-further)).
+
+**Why the harness is hand-built.** The README allows any framework, but the score is a set equality on ids, the gate is three rules over a JSON baseline committed in git, and every run's full trace is already a local record the run page lays out, so a hosted tracer such as LangSmith or Braintrust would add a second key and a service for what `runs/` and `eval/baselines/` already hold. One would earn its place with a model judge, whose verdicts need annotation queues for a person's labels, or with dashboards over many runs.
 
 Each change is written up in [`eval/experiments/`](eval/experiments/README.md), measured on Haiku 5.5 at effort high in local runs, three full runs per side unless the row says otherwise. Each row's before and after are the runs recorded in its own experiment file:
 
 | Change | What the traces showed | Passed, before → after |
 | --- | --- | --- |
 | [The `ids` rule](eval/experiments/2026-10-11-ids-rule.md) | Recall about 90%, precision 61 to 74%: answers added the starting resource, the hops, or context | 13, 11, 10 → 20, 21, 21 |
-| [Conventions](eval/experiments/2026-10-11-conventions.md) | The remaining failures were readings: network rules for "connect", queues counted as storage | 20, 21, 21 → 24, 25, 25 |
+| [Conventions](eval/experiments/2026-10-11-conventions.md) | Written by a Claude agent blind to the questions, then measured; the two readings that differed from the key's were replaced by the key's | 20, 21, 21 → 24, 25, 25 |
 | [Business area](eval/experiments/2026-10-12-business-area.md) | The agent found an area's resources, then dropped them, modelling an area as a lane of compute | 25, 25, 25, 24 (four runs) → 27, 27, 24 |
 | [Meaning search](eval/experiments/2026-10-12-meaning-search.md) | Not a failure: the required vector layer, hypothesis "no change" | 25, 26, 26 → 25, 25, 26 |
 
 The agent did not change between the third row's "after" and the fourth row's "before": both are runs of the same prompt, and the gap between 27, 27, 24 and 25, 26, 26 is its run-to-run spread, 24 to 27 over the ten runs of the agent before meaning search. The fourth row's "before" is the committed baseline, taken on that prompt after the business-area runs.
 
-**How much of the score rests on the key.** Three readings in the conventions were taken from it:
+**How much of the score rests on the key.** I am not on dave.io's team, so the only record of what its words mean on this estate (what "reach" means, what counts as storage, what makes up a business area) is its answer key. A new engineer learns the house vocabulary from the house's answers, and the conventions write that vocabulary down once, for every question. The key was generated by a script ([F21](docs/facts.md#f21-the-answer-key-is-generated-by-a-script-outside-this-repository)), so each expected set follows a rule; what I took from it is the rule, stated as a reading a person would give, never a line written to win one question. Where the key contradicted itself, I asked instead of guessing: on whether queues are data resources ([Known misses](#known-misses)). Three readings in the conventions were taken from the key:
 
 - **"Reach" and "connect" as permission,** and **"storage" as buckets and databases:** measured together against the blind reading, 24, 25, 25 against 22, 21, 21 (above).
 - **Which resource kinds make up a business area:** without it, the business-area prompt fell to 23, 24, 23 (three runs).
@@ -249,13 +289,18 @@ Three questions fail on every run, and no convention line was written to win the
 - **"What should I inspect if fulfillment jobs are backing up?"** The key starts from the queues described as fulfillment work and adds the instances that can reach them; the agent lists the area's workers.
 - **"The instances described as order-flow: which data resources do they actually have access to?"** The key counts four queues as data here and none in "Which production data resources have no monitoring?", though 14 of the 16 production queues have no monitor; dave.io confirmed queues are not data resources. This set is also the one exception to the key's area rule: production only, though no environment is named ([F22](docs/facts.md#f22-the-key-reads-reach-and-connect-as-permission-and-storage-and-data-as-buckets-and-databases-with-one-exception), [F23](docs/facts.md#f23-how-the-key-reads-a-business-area-by-the-resources-own-description-across-environments)).
 
-The first two could each be won by a convention line written for that one question, which is the bias the conventions avoid.
+The storefront miss could be won by a convention line written for that one question, which is the bias the conventions avoid. The fulfillment miss is different: the rule it needs is already in the conventions ("to find what uses, reaches or watches something, follow the graph from that resource, not from the compute you expect to use it"), and the agent does not apply it there.
+
+The README names two traps among the questions ([README § Evaluation Harness](README.md#evaluation-harness) and the notes under it): some point one way in the descriptions and another in the graph, and at least one has an empty answer.
+
+- **Descriptions against the graph:** "What should I inspect if fulfillment jobs are backing up?" is one. The instances described as fulfillment workers have no permission on the queues described as fulfillment work; four instances described as product-information hosts do. The key takes the queues from their descriptions and the instances from the graph ([F23](docs/facts.md#f23-how-the-key-reads-a-business-area-by-the-resources-own-description-across-environments)). The agent lists the workers, says in its prose that they cannot reach those queues, and fails on exact match: the second miss above, 0 of 3 in the baseline and in every local run of the shipped prompt. The conventions already say to follow the graph from the resource; why the agent does not here is a hypothesis, not a measurement: the question names an area, so the area rule fires first and the agent never starts from the queues.
+- **Empty answers:** two questions expect none, "Do any GitHub workflows deploy directly to a database?" and "Can any dev compute instance reach production storage?" (`eval/expected.generated.json`). The answer contract asks for an empty `ids` with what was checked in the prose, which passes; an answer with no `final_answer` call fails, because no answer is not an answer of "none". Both passed all three baseline trials; the workflows question still wobbles, as below.
 
 Three questions wobble, each by naming the right resources in the prose and putting one too many or one too few in `ids`:
 
 - **"What is the compute stack in my dev env?"** passed about four runs in ten on the shipped prompt when the baseline was taken, and 0 of 3 in it (commit `268529c`). The misses leave out the dev load balancer and its target groups.
 - **"Which repository's code ends up on i-ecomm-dev-02?"** passed 10 of 11 runs on the earlier prompt ([F24](docs/facts.md#f24-four-questions-failed-on-every-run-of-prompt-1f77e706-and-four-more-on-some-runs)), 2 of 3 at accept, and 0 of 3 in the local run that sat on rule 1's floor, each time adding the deploy workflow.
-- **"Do any GitHub workflows deploy directly to a database?"** is in the solid set at three of three, yet it failed 2 of 3 trials in meaning search's first CI run and 2 of 7 local trials of the same agent on 12 Oct after the merge, listing every deploy workflow where the key expects none. The solid set is a sample of three, not a guarantee.
+- **"Do any GitHub workflows deploy directly to a database?"** is in the solid set at three of three, yet it failed 2 of 3 trials in meaning search's first CI run and 2 of 7 local trials of the same agent on 12 Oct after the merge. In both local failures the prose answered no, correctly, naming the workflows it checked; the slip is in `ids`, where it listed the deploy workflows it had ruled out, against a key that expects none. The solid set is a sample of three, not a guarantee.
 
 The thirty questions cannot test follow-up turns or adversarial input. With three readings taken from the key, the score is also partly fitted to it.
 
