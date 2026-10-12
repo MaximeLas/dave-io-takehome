@@ -65,25 +65,29 @@ await driver.executeQuery(`CREATE FULLTEXT INDEX ${FULLTEXT} IF NOT EXISTS FOR (
 await driver.executeQuery("CALL db.awaitIndex($name, 120)", { name: FULLTEXT });
 
 const rankings: Record<string, Ranking[]> = { "vectors: description": [], "vectors: name + description": [], "full-text (BM25)": [] };
-for (const [i, phrase] of devSet.phrases.entries()) {
-  const q = phraseVectors[i] ?? [];
-  rankings["vectors: description"]?.push(
-    byDescription(descriptionIds.map((id, j) => ({ descriptionId: id, score: cosineScore(q, descriptionVectors[j] ?? []) }))),
-  );
-  rankings["vectors: name + description"]?.push(
-    byDescription(nodes.map((n, j) => ({ descriptionId: n.descriptionId, score: cosineScore(q, nodeVectors[j] ?? []) }))),
-  );
-  const lucene = phrase.query.replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, "\\$&");
-  const { records: hits } = await driver.executeQuery(
-    `CALL db.index.fulltext.queryNodes($name, $q) YIELD node, score RETURN node.description AS text, score`,
-    { name: FULLTEXT, q: lucene },
-  );
-  rankings["full-text (BM25)"]?.push(
-    byDescription(hits.map((h) => ({ descriptionId: idOfText.get(h.get("text") as string) ?? "", score: h.get("score") as number }))),
-  );
+try {
+  for (const [i, phrase] of devSet.phrases.entries()) {
+    const q = phraseVectors[i] ?? [];
+    rankings["vectors: description"]?.push(
+      byDescription(descriptionIds.map((id, j) => ({ descriptionId: id, score: cosineScore(q, descriptionVectors[j] ?? []) }))),
+    );
+    rankings["vectors: name + description"]?.push(
+      byDescription(nodes.map((n, j) => ({ descriptionId: n.descriptionId, score: cosineScore(q, nodeVectors[j] ?? []) }))),
+    );
+    const lucene = phrase.query.replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, "\\$&");
+    const { records: hits } = await driver.executeQuery(
+      `CALL db.index.fulltext.queryNodes($name, $q) YIELD node, score RETURN node.description AS text, score`,
+      { name: FULLTEXT, q: lucene },
+    );
+    rankings["full-text (BM25)"]?.push(
+      byDescription(hits.map((h) => ({ descriptionId: idOfText.get(h.get("text") as string) ?? "", score: h.get("score") as number }))),
+    );
+  }
+} finally {
+  // The full-text index exists only for this measurement; it must not outlive a failure.
+  await driver.executeQuery(`DROP INDEX ${FULLTEXT} IF EXISTS`);
+  await closeDriver();
 }
-await driver.executeQuery(`DROP INDEX ${FULLTEXT}`);
-await closeDriver();
 
 // Partial labels are defensible either way, so they are taken out of the ranking: they
 // count neither as hits nor as misses.
@@ -129,16 +133,6 @@ for (let t = 0.6; t <= 0.9001; t += 0.01) {
 for (let m = 0.01; m <= 0.1501; m += 0.01) {
   cutoffs.push({ label: `within ${m.toFixed(2)} of best`, keep: (r) => r.filter((x) => x.score >= (r[0]?.score ?? 0) - m) });
 }
-// Both at once: the margin follows each phrase's own score scale, the floor stops a phrase
-// that matches nothing from returning a flat band of weak matches.
-for (let t = 0.6; t <= 0.7501; t += 0.01) {
-  for (let m = 0.05; m <= 0.1201; m += 0.01) {
-    cutoffs.push({
-      label: `>= ${t.toFixed(2)} and within ${m.toFixed(2)}`,
-      keep: (r) => r.filter((x) => x.score >= t && x.score >= (r[0]?.score ?? 0) - m),
-    });
-  }
-}
 for (const k of [5, 10, 15, 20]) cutoffs.push({ label: `top ${k}`, keep: (r) => r.slice(0, k) });
 
 function evaluate(list: Ranking[], cutoff: Cutoff) {
@@ -166,7 +160,7 @@ for (const name of ["vectors: description", "vectors: name + description"]) {
     console.log(`${s.c.label.padEnd(24)} ${pct(s.P)}     ${pct(s.R)}  ${s.f2.toFixed(2)}  ${s.noise.toFixed(1)}`);
   }
   const best = (kind: string) => scored.find((s) => s.c.label.startsWith(kind));
-  for (const kind of ["score >=", "within", ">=", "top"]) {
+  for (const kind of ["score >=", "within", "top"]) {
     const s = best(kind);
     if (s) console.log(`best ${kind.padEnd(9)} ${s.c.label}: precision ${pct(s.P)}, recall ${pct(s.R)}, F2 ${s.f2.toFixed(2)}, noise ${s.noise.toFixed(1)}`);
   }

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { MAX_ROWS, runReadQuery, type QueryResult } from "../graph/query.js";
 import { searchDescriptions as rankDescriptions, type SearchResult } from "../search/search.js";
 
-/** How many descriptions a search returns unless the model asks for more; chosen on the blind dev set. */
+/** How many descriptions a search returns unless the model asks for another number; the best top-k on the blind dev set. */
 export const SEARCH_DEFAULT_LIMIT = 10;
 
 /** The graph query tool: the model writes Cypher and gets compact rows back. */
@@ -52,15 +52,18 @@ export const searchDescriptions = tool(
       "Find resources by what their descriptions mean, not by the exact words. Every resource in the",
       "graph has a short description of what it is for. This tool ranks those descriptions by how close",
       "their meaning is to your phrase, so it finds resources described in other words than yours",
-      "(\"shipping\" when the description says \"fulfillment\"). Search with a short phrase about a purpose",
+      "(\"firewall rules\" when the description says \"security group\"). Search with a short phrase about a purpose",
       "or a role, not a whole question.",
       "",
       "The first line says how many descriptions are shown, out of how many. Then one line per description,",
       "best first: its score, the description, and the ids of every resource that carries it (many",
       "resources share one description). The score ranks descriptions within one search; it does not say",
       "whether a description is relevant. Read each description and decide, and confirm what matters with",
-      "run_cypher. The last line gives the score of the best description left out: when the last ones",
-      "shown are still relevant, search again with a larger limit.",
+      "run_cypher. The last line gives the score of the best description left out.",
+      "",
+      `Start with the default limit (${SEARCH_DEFAULT_LIMIT}): the closest descriptions come first, and every`,
+      "extra one is more to read. Search again with a larger limit only when the last ones shown are",
+      "still relevant, since the next ones are then likely to be relevant too.",
       "",
       "A failure returns `Search error:` with the reason.",
     ].join("\n"),
@@ -72,7 +75,7 @@ export const searchDescriptions = tool(
         .min(1)
         .max(100)
         .optional()
-        .describe(`How many descriptions to return, best first. Default ${SEARCH_DEFAULT_LIMIT}.`),
+        .describe(`How many descriptions to return, best first. Leave it out on a first search (default ${SEARCH_DEFAULT_LIMIT}).`),
     }),
   },
 );

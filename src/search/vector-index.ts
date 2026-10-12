@@ -1,20 +1,16 @@
-// The vector index over node descriptions, laid out as Neo4j's own GraphRAG tooling does:
-// each node carries the vector of its own description in an `embedding` property, written
-// with `db.create.setNodeVectorProperty` (stored more compactly than a plain SET), and a
-// cosine vector index over that property serves the search. Vectors on the nodes, rather
-// than on separate description nodes, keep the graph the agent counts and walks unchanged.
+// Builds the vector index over node descriptions, laid out as Neo4j's own GraphRAG tooling
+// does: each node carries the vector of its own description in a property, written with
+// `db.create.setNodeVectorProperty` (stored more compactly than a plain SET), and a cosine
+// vector index over that property serves the search. Vectors on the nodes, rather than on
+// separate description nodes, keep the graph the agent counts and walks unchanged.
 //
-// The index name carries the model id, so an index built by another model reads as
-// missing instead of silently answering with vectors the search phrase cannot match.
+// Whether the index is ready is checked in src/graph/health.ts, which needs only the names
+// in model.ts and not the model itself.
 import neo4j from "neo4j-driver";
 
 import { getDriver } from "../graph/driver.js";
-import { embed, EMBEDDING_DIMENSIONS, EMBEDDING_MODEL } from "./embed.js";
-
-/** The node property that holds each node's description vector. */
-export const EMBEDDING_PROPERTY = "embedding";
-/** The vector index's name, derived from the model so a model change cannot go unnoticed. */
-export const INDEX_NAME = `descriptions_${EMBEDDING_MODEL.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+import { embed } from "./embed.js";
+import { EMBEDDING_DIMENSIONS, EMBEDDING_PROPERTY, INDEX_NAME } from "./model.js";
 
 const INDEX_WAIT_SECONDS = 300;
 
@@ -26,7 +22,7 @@ export interface IndexBuild {
 
 /**
  * Embeds every node's description and (re)builds the index. Idempotent: every vector is
- * rewritten on each run, and a vector index left by another model is dropped first.
+ * rewritten on each run, and a vector index left by another model or revision is dropped first.
  */
 export async function buildIndex(): Promise<IndexBuild> {
   const driver = getDriver();
@@ -62,26 +58,4 @@ export async function buildIndex(): Promise<IndexBuild> {
   await driver.executeQuery("CALL db.awaitIndex($name, $seconds)", { name: INDEX_NAME, seconds: INDEX_WAIT_SECONDS });
 
   return { nodes: nodes.length, distinctTexts: texts.length };
-}
-
-/** Throws, with the fix, unless the index exists for this model, is online, and covers every node. */
-export async function assertIndexReady(): Promise<void> {
-  const driver = getDriver();
-  const { records } = await driver.executeQuery(
-    "SHOW VECTOR INDEXES YIELD name, state WHERE name = $name RETURN state",
-    { name: INDEX_NAME },
-  );
-  const fix = "Build it with `npm run index`.";
-  if (records.length === 0) throw new Error(`The description index for ${EMBEDDING_MODEL} is missing. ${fix}`);
-  const state = records[0]?.get("state") as string;
-  if (state !== "ONLINE") throw new Error(`The description index is ${state}, not ONLINE. ${fix}`);
-
-  const { records: coverage } = await driver.executeQuery(
-    `MATCH (n:Entity)
-     RETURN count(n) AS nodes, count { MATCH (m:Entity) WHERE size(m.\`${EMBEDDING_PROPERTY}\`) = $dimensions } AS covered`,
-    { dimensions: EMBEDDING_DIMENSIONS },
-  );
-  const nodes = Number(coverage[0]?.get("nodes") ?? 0);
-  const covered = Number(coverage[0]?.get("covered") ?? 0);
-  if (covered !== nodes) throw new Error(`The description index covers ${covered} of ${nodes} nodes. ${fix}`);
 }

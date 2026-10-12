@@ -225,9 +225,9 @@ On the Community edition, a vector is stored on its node as a list of floats wit
 
 ### F26. The embedding model runs locally; its two ONNX ports give the same vectors to six decimals
 
-`@huggingface/transformers` runs `all-MiniLM-L6-v2` in Node with no API key: 384 numbers per text with `pooling: "mean"` and `normalize: true`, as the original sentence-transformers model is configured. The library's own examples name the port `onnx-community/all-MiniLM-L6-v2-ONNX`; the older `Xenova/all-MiniLM-L6-v2` gives the same vectors to six decimal places (two exports of the same weights). The fp32 model is about 90 MB, downloaded on first use into `node_modules/@huggingface/transformers/.cache`, so a fresh `npm ci` (as in CI) downloads it again.
+`@huggingface/transformers` runs `all-MiniLM-L6-v2` in Node with no API key: 384 numbers per text with `pooling: "mean"` and `normalize: true`, as the original sentence-transformers model is configured. The library's own examples name the port `onnx-community/all-MiniLM-L6-v2-ONNX`; the older `Xenova/all-MiniLM-L6-v2` gives the same vectors to six decimal places (two exports of the same weights). The fp32 model is about 90 MB, downloaded on first use into `node_modules/@huggingface/transformers/.cache`, so a fresh `npm ci` (as in CI) downloads it again. The library fetches the repository's `main` branch unless given a `revision`, so the code pins a commit (`src/search/model.ts`) and the index name carries it.
 
-- Version: @huggingface/transformers 4.3.1
+- Version: @huggingface/transformers 4.3.1; model repository at commit `aff7a1d`
 - Evidence: `grep -n "onnx-community/all-MiniLM-L6-v2-ONNX" node_modules/@huggingface/transformers/types/pipelines/feature-extraction.d.ts`; `npx tsx -e '(async () => { const { pipeline } = await import("@huggingface/transformers"); for (const id of ["onnx-community/all-MiniLM-L6-v2-ONNX", "Xenova/all-MiniLM-L6-v2"]) { const e = await pipeline("feature-extraction", id, { dtype: "fp32" }); const v = (await e(["payment data"], { pooling: "mean", normalize: true })).tolist()[0]; console.log(id, v.length, v.slice(0, 3)); } })()'` prints 384 for both, and first numbers that agree to six decimals
 - Checked: 2026-10-12
 

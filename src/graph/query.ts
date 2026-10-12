@@ -14,12 +14,11 @@
 //   otherwise spend thousands of tokens on numbers the model cannot read.
 import neo4j, { type Node, type Path, type Relationship } from "neo4j-driver";
 
+import { EMBEDDING_DIMENSIONS } from "../search/model.js";
 import { getDriver } from "./driver.js";
 
 export const MAX_ROWS = 100;
 export const QUERY_TIMEOUT_MS = 30_000;
-/** A list of at least this many numbers is a vector, shown by its length only. Nothing else in the graph comes close. */
-export const VECTOR_MIN_LENGTH = 32;
 
 /** The rows of a query (at most MAX_ROWS of the totalRows found), or the database's error text. */
 export type QueryResult =
@@ -94,8 +93,16 @@ function pathText(path: Path): string {
   return text;
 }
 
+// A description vector: exactly as long as the model's output, and not all integers. Integers
+// arrive as plain numbers too (see driver.ts), so a long list the query computes, such as a
+// collected count, must not match.
 function isVector(value: unknown): value is number[] {
-  return Array.isArray(value) && value.length >= VECTOR_MIN_LENGTH && value.every((v) => typeof v === "number");
+  return (
+    Array.isArray(value) &&
+    value.length === EMBEDDING_DIMENSIONS &&
+    value.every((v) => typeof v === "number") &&
+    value.some((v) => !Number.isInteger(v))
+  );
 }
 
 function isPlainObject(value: object): boolean {

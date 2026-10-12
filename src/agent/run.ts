@@ -18,7 +18,7 @@ import {
   type Effort,
   type ModelId,
 } from "./agent.js";
-import { EMBEDDING_MODEL } from "../search/embed.js";
+import { EMBEDDING_MODEL_ID } from "../search/model.js";
 import { PROMPT_VERSION } from "./prompt.js";
 import { costUsd, type RunRecord, type TokenUsage, type ToolCallRecord } from "./record.js";
 
@@ -95,7 +95,7 @@ export async function runAgent(input: RunInput, options: RunOptions = {}): Promi
     model: settings.model,
     modelSettings: { effort: settings.effort, maxTokens: settings.maxTokens },
     promptVersion: PROMPT_VERSION,
-    embeddingModel: EMBEDDING_MODEL,
+    embeddingModel: EMBEDDING_MODEL_ID,
     codeVersion: codeVersion(),
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),

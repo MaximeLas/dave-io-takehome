@@ -37,7 +37,7 @@ export interface RunRecord {
   model: string;
   modelSettings: Record<string, unknown>;
   promptVersion: string;
-  /** The model that embeds search phrases; the description index must have been built by the same one. */
+  /** The model and revision that embed search phrases; the description index must have been built by the same. */
   embeddingModel: string;
   /** The git commit the code ran from, "-dirty" when the tree had changes; "unknown" outside git. */
   codeVersion: string;

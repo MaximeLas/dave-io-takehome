@@ -17,7 +17,7 @@ import { DEFAULT_EFFORT, DEFAULT_MODEL, type Effort, type ModelId } from "../src
 import { PROMPT_VERSION } from "../src/agent/prompt.js";
 import { saveRun } from "../src/agent/record.js";
 import { codeVersion, runAgent } from "../src/agent/run.js";
-import { assertGraphSeeded } from "../src/graph/health.js";
+import { assertGraphReady } from "../src/graph/health.js";
 import { loadQuestions, type Question } from "./questions.js";
 import { assemble, type EvalRun, type QuestionResult } from "./record.js";
 import { diagnostics, loadAnswerKey, scoreAnswer } from "./score.js";
@@ -49,7 +49,7 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   const questions = options.only ? all.filter((q) => options.only!.includes(q.id)) : all;
   const unknown = (options.only ?? []).filter((id) => !all.some((q) => q.id === id));
   if (unknown.length > 0) throw new Error(`Unknown question id(s): ${unknown.join(", ")}`);
-  await assertGraphSeeded();
+  await assertGraphReady();
 
   const startedAt = new Date();
   const results: QuestionResult[][] = Array.from({ length: trials }, () => []);

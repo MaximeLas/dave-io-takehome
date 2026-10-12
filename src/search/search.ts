@@ -11,7 +11,7 @@ import neo4j from "neo4j-driver";
 
 import { getDriver } from "../graph/driver.js";
 import { embed } from "./embed.js";
-import { EMBEDDING_PROPERTY, INDEX_NAME } from "./vector-index.js";
+import { EMBEDDING_PROPERTY, INDEX_NAME } from "./model.js";
 
 /** One description and the nodes that carry it, with its score: Neo4j's cosine score, (1 + cos) / 2. */
 export interface DescriptionHit {
@@ -32,9 +32,11 @@ export interface SearchResult {
 export async function searchDescriptions(phrase: string, limit: number): Promise<SearchResult> {
   const [vector] = await embed([phrase]);
   const { records } = await getDriver().executeQuery(
-    // Every node is asked for, so the grouping sees whole groups; at this graph's size the
-    // approximate index returns them all.
-    `MATCH (n:Entity)
+    // Every node is asked for, so the grouping sees whole groups: at 297 nodes the index is
+    // in effect an exact scan. A large graph would ask for `limit` times the largest group
+    // instead, or index one node per distinct description. SEARCH exists in Cypher 25 only.
+    `CYPHER 25
+     MATCH (n:Entity)
      SEARCH n IN (VECTOR INDEX \`${INDEX_NAME}\` FOR $vector LIMIT $all) SCORE AS score
      WITH n.description AS description, score, n.id AS id ORDER BY id
      RETURN description, max(score) AS score, collect(id) AS ids
