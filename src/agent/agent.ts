@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import { requireEnv } from "../env.js";
 import { IDS_RULE, SYSTEM_PROMPT } from "./prompt.js";
-import { runCypher } from "./tools.js";
+import { runCypher, searchDescriptions } from "./tools.js";
 
 /** The models the agent can run on; a model is listed once its price row exists in record.ts. */
 export const MODEL_IDS = ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"] as const;
@@ -87,7 +87,7 @@ export function createInfraAgent(settings: AgentSettings, checkpointer: BaseChec
 
   return createDeepAgent({
     model,
-    tools: [runCypher],
+    tools: [runCypher, searchDescriptions],
     systemPrompt: SYSTEM_PROMPT,
     responseFormat: toolStrategy(ANSWER_SCHEMA),
     checkpointer,

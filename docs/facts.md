@@ -26,7 +26,7 @@ One line per fact, linked to its entry. The id is the handle: cite it, or search
 - **F3** [A Claude agent gets no `write_todos` planning tool by default](#f3-a-claude-agent-gets-no-write_todos-planning-tool-by-default)
 - **F4** [Custom tool names must not collide with built-in tool names](#f4-custom-tool-names-must-not-collide-with-built-in-tool-names)
 - **F5** [Known audit finding with no fix: `braces`, via `micromatch` and `fast-glob`](#f5-known-audit-finding-with-no-fix-braces-via-micromatch-and-fast-glob): accepted, and why it is unreachable here
-- **F6** [The built-in filesystem tools are replaced, not removed](#f6-the-built-in-filesystem-tools-are-replaced-not-removed): the model sees `run_cypher`, `read_file`, `task`
+- **F6** [The built-in filesystem tools are replaced, not removed](#f6-the-built-in-filesystem-tools-are-replaced-not-removed): the model sees `run_cypher`, `search_descriptions`, `read_file`, `task`
 - **F7** [A tool result over about 20,000 tokens is moved to the agent's filesystem](#f7-a-tool-result-over-about-20000-tokens-is-moved-to-the-agents-filesystem)
 - **F8** [Prompt caching is on by default for Anthropic models](#f8-prompt-caching-is-on-by-default-for-anthropic-models)
 - **F9** [Reading the trace: one `AIMessage` per model call, `input_tokens` includes the cached tokens](#f9-reading-the-trace-one-aimessage-per-model-call-input_tokens-includes-the-cached-tokens)
@@ -100,13 +100,13 @@ The to-do middleware is added only through the harness profile for OpenAI Codex 
 
 ### F6. The built-in filesystem tools are replaced, not removed
 
-Passing `tools` to `createDeepAgent` adds to the built-in filesystem tools (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`); it never removes them. A middleware passed in `middleware` with the same `name` as a default one replaces it, so `createFilesystemMiddleware({ tools: ["read_file"] })` leaves a single filesystem tool; the library requires `read_file` in any explicit list. The `task` tool (the general-purpose subagent) stays. With that, the model sees exactly three tools: `run_cypher`, `read_file`, `task`.
+Passing `tools` to `createDeepAgent` adds to the built-in filesystem tools (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`); it never removes them. A middleware passed in `middleware` with the same `name` as a default one replaces it, so `createFilesystemMiddleware({ tools: ["read_file"] })` leaves a single filesystem tool; the library requires `read_file` in any explicit list. The `task` tool (the general-purpose subagent) stays. With that, the model sees exactly four tools besides `final_answer`, the answer itself: `run_cypher`, `search_descriptions`, `read_file`, `task`.
 
 The same replacement applies to the general-purpose subagent behind `task`: its middleware is merged with ours, so it also gets `read_file` alone.
 
 - Version: deepagents 1.14.2
-- Evidence: `grep -n "merged.set(middleware.name" node_modules/deepagents/dist/langsmith-*.js` (same-name replacement); `grep -n "must be included in every explicit array" node_modules/deepagents/dist/agent-*.d.ts`; `grep -n "generalPurposeSpec.middleware = mergeMiddlewareStack" node_modules/deepagents/dist/langsmith-*.js` (the subagent); `npm run ask -- "List the exact names of your tools, comma-separated, and call none."` answers `run_cypher, read_file, task` (one small model call)
-- Checked: 2026-10-09
+- Evidence: `grep -n "merged.set(middleware.name" node_modules/deepagents/dist/langsmith-*.js` (same-name replacement); `grep -n "must be included in every explicit array" node_modules/deepagents/dist/agent-*.d.ts`; `grep -n "generalPurposeSpec.middleware = mergeMiddlewareStack" node_modules/deepagents/dist/langsmith-*.js` (the subagent); `npm run ask -- "List the exact names of your tools, comma-separated, and call none."` replies `run_cypher, search_descriptions, read_file, task, final_answer` in prose, in the record's `messages` (one small model call; told to call no tool, it leaves the structured answer empty)
+- Checked: 2026-10-12
 
 ### F7. A tool result over about 20,000 tokens is moved to the agent's filesystem
 
