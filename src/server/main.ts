@@ -9,16 +9,16 @@ import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 
 import { requireEnv } from "../env.js";
-import { assertGraphSeeded } from "../graph/health.js";
+import { assertGraphReady } from "../graph/health.js";
 import { APP_OPTIONS, configureApp } from "./app.js";
 import { AppModule } from "./app.module.js";
 
-// What every chat turn needs is checked before the server listens. The graph for the reason
-// the eval checks it: the query tool returns a database outage to the model as text, which
-// would read as wrong answers instead of an error. This holds at startup only; an outage
+// What every chat turn needs is checked before the server listens. The graph and its
+// description index for the reason the eval checks them: the tools return a database outage
+// to the model as text, which would read as wrong answers instead of an error. This holds at startup only; an outage
 // later shows in the trace as failed queries.
 requireEnv("APP_ANTHROPIC_API_KEY");
-await assertGraphSeeded();
+await assertGraphReady();
 
 const app = configureApp(await NestFactory.create<NestExpressApplication>(AppModule, APP_OPTIONS));
 app.enableShutdownHooks();

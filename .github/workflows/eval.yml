@@ -60,7 +60,10 @@ jobs:
         if: ${{ failure() && steps.graph.outcome == 'failure' }}
         run: docker compose logs --no-color --tail 200 neo4j
 
-      # Any index the agent's search reads is built here: after the graph is seeded, before the eval.
+      - name: Build the description index
+        # The vector index the search tool reads, after the graph is seeded and before the
+        # eval, whose preflight refuses to start without it. Downloads the embedding model.
+        run: npm run index
 
       - name: Eval
         env:

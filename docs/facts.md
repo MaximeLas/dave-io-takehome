@@ -26,7 +26,7 @@ One line per fact, linked to its entry. The id is the handle: cite it, or search
 - **F3** [A Claude agent gets no `write_todos` planning tool by default](#f3-a-claude-agent-gets-no-write_todos-planning-tool-by-default)
 - **F4** [Custom tool names must not collide with built-in tool names](#f4-custom-tool-names-must-not-collide-with-built-in-tool-names)
 - **F5** [Known audit finding with no fix: `braces`, via `micromatch` and `fast-glob`](#f5-known-audit-finding-with-no-fix-braces-via-micromatch-and-fast-glob): accepted, and why it is unreachable here
-- **F6** [The built-in filesystem tools are replaced, not removed](#f6-the-built-in-filesystem-tools-are-replaced-not-removed): the model sees `run_cypher`, `read_file`, `task`
+- **F6** [The built-in filesystem tools are replaced, not removed](#f6-the-built-in-filesystem-tools-are-replaced-not-removed): the model sees `run_cypher`, `search_descriptions`, `read_file`, `task`
 - **F7** [A tool result over about 20,000 tokens is moved to the agent's filesystem](#f7-a-tool-result-over-about-20000-tokens-is-moved-to-the-agents-filesystem)
 - **F8** [Prompt caching is on by default for Anthropic models](#f8-prompt-caching-is-on-by-default-for-anthropic-models)
 - **F9** [Reading the trace: one `AIMessage` per model call, `input_tokens` includes the cached tokens](#f9-reading-the-trace-one-aimessage-per-model-call-input_tokens-includes-the-cached-tokens)
@@ -48,6 +48,11 @@ One line per fact, linked to its entry. The id is the handle: cite it, or search
 
 - **F17** [A read-mode transaction refuses writes on the server](#f17-a-read-mode-transaction-refuses-writes-on-the-server): the query tool's safety guarantee
 - **F18** [Unknown labels and relationship types are warnings, not errors](#f18-unknown-labels-and-relationship-types-are-warnings-not-errors): forwarded to the model, so a misspelled type is caught by the database
+- **F25** [Vector search on this server: the `SEARCH` clause, integer dimensions, and scores of (1 + cos) / 2](#f25-vector-search-on-this-server-the-search-clause-integer-dimensions-and-scores-of-1--cos--2): how the index is built and queried, and why model-card thresholds do not transfer
+
+**[Embeddings](#embeddings)**
+
+- **F26** [The embedding model runs locally; its two ONNX ports give the same vectors to six decimals](#f26-the-embedding-model-runs-locally-its-two-onnx-ports-give-the-same-vectors-to-six-decimals): no key, 384 numbers, downloaded on first use
 
 ## deepagents
 
@@ -95,13 +100,13 @@ The to-do middleware is added only through the harness profile for OpenAI Codex 
 
 ### F6. The built-in filesystem tools are replaced, not removed
 
-Passing `tools` to `createDeepAgent` adds to the built-in filesystem tools (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`); it never removes them. A middleware passed in `middleware` with the same `name` as a default one replaces it, so `createFilesystemMiddleware({ tools: ["read_file"] })` leaves a single filesystem tool; the library requires `read_file` in any explicit list. The `task` tool (the general-purpose subagent) stays. With that, the model sees exactly three tools: `run_cypher`, `read_file`, `task`.
+Passing `tools` to `createDeepAgent` adds to the built-in filesystem tools (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`); it never removes them. A middleware passed in `middleware` with the same `name` as a default one replaces it, so `createFilesystemMiddleware({ tools: ["read_file"] })` leaves a single filesystem tool; the library requires `read_file` in any explicit list. The `task` tool (the general-purpose subagent) stays. With that, the model sees exactly four tools besides `final_answer`, the answer itself: `run_cypher`, `search_descriptions`, `read_file`, `task`.
 
 The same replacement applies to the general-purpose subagent behind `task`: its middleware is merged with ours, so it also gets `read_file` alone.
 
 - Version: deepagents 1.14.2
-- Evidence: `grep -n "merged.set(middleware.name" node_modules/deepagents/dist/langsmith-*.js` (same-name replacement); `grep -n "must be included in every explicit array" node_modules/deepagents/dist/agent-*.d.ts`; `grep -n "generalPurposeSpec.middleware = mergeMiddlewareStack" node_modules/deepagents/dist/langsmith-*.js` (the subagent); `npm run ask -- "List the exact names of your tools, comma-separated, and call none."` answers `run_cypher, read_file, task` (one small model call)
-- Checked: 2026-10-09
+- Evidence: `grep -n "merged.set(middleware.name" node_modules/deepagents/dist/langsmith-*.js` (same-name replacement); `grep -n "must be included in every explicit array" node_modules/deepagents/dist/agent-*.d.ts`; `grep -n "generalPurposeSpec.middleware = mergeMiddlewareStack" node_modules/deepagents/dist/langsmith-*.js` (the subagent); `npm run ask -- "List the exact names of your tools, comma-separated, and call none."` replies `run_cypher, search_descriptions, read_file, task, final_answer` in prose, in the record's `messages` (one small model call; told to call no tool, it leaves the structured answer empty)
+- Checked: 2026-10-12
 
 ### F7. A tool result over about 20,000 tokens is moved to the agent's filesystem
 
@@ -207,6 +212,24 @@ A query that names a label or relationship type absent from the database still r
 - Version: neo4j-driver 6.2.0, Neo4j 2026.04.0
 - Evidence: `curl -s -u neo4j:neo4j -H 'Content-Type: application/json' -d '{"statements":[{"statement":"MATCH ()-[:NOPE]->() RETURN count(*)"}]}' http://localhost:7474/db/neo4j/tx/commit | grep -o '"code":"[^"]*"'` lists the `UnknownRelationshipTypeWarning`
 - Checked: 2026-10-08
+
+### F25. Vector search on this server: the `SEARCH` clause, integer dimensions, and scores of (1 + cos) / 2
+
+On the Community edition, a vector is stored on its node as a list of floats with `db.create.setNodeVectorProperty` (the `VECTOR` property type needs Enterprise), and the index is queried with the Cypher 25 `SEARCH` clause; `db.index.vector.queryNodes` still runs but is deprecated in its favour. The index's `vector.dimensions` must be an integer, and the JS driver sends a plain number as a float, so the build passes `neo4j.int(384)`. A cosine score is (1 + cos) / 2, between 0 and 1, so a threshold quoted for raw cosine does not carry over.
+
+- Version: Neo4j 2026.04.0 Community, neo4j-driver 6.2.0
+- Evidence: `docker compose exec -T neo4j cypher-shell -u neo4j -p neo4j "SHOW PROCEDURES YIELD name, deprecatedBy WHERE name STARTS WITH 'db.index.vector' RETURN name, deprecatedBy"` names `SEARCH`; `... "RETURN vector.similarity.cosine([1.0,0.0],[0.0,1.0]), vector.similarity.cosine([1.0,0.0],[-1.0,0.0])"` returns `0.5, 0.0`; `... "CREATE VECTOR INDEX probe IF NOT EXISTS FOR (n:Probe) ON n.v OPTIONS {indexConfig: {\`vector.dimensions\`: 384.0}}"` fails with "Expected to be MAP<STRING, BOOLEAN | STRING | INTEGER>"
+- Checked: 2026-10-12
+
+## Embeddings
+
+### F26. The embedding model runs locally; its two ONNX ports give the same vectors to six decimals
+
+`@huggingface/transformers` runs `all-MiniLM-L6-v2` in Node with no API key: 384 numbers per text with `pooling: "mean"` and `normalize: true`, as the original sentence-transformers model is configured. The library's own examples name the port `onnx-community/all-MiniLM-L6-v2-ONNX`; the older `Xenova/all-MiniLM-L6-v2` gives the same vectors to six decimal places (two exports of the same weights). The fp32 model is about 90 MB, downloaded on first use into `node_modules/@huggingface/transformers/.cache`, so a fresh `npm ci` (as in CI) downloads it again. The library fetches the repository's `main` branch unless given a `revision`, so the code pins a commit (`src/search/model.ts`) and the index name carries it.
+
+- Version: @huggingface/transformers 4.3.1; model repository at commit `aff7a1d`
+- Evidence: `grep -n "onnx-community/all-MiniLM-L6-v2-ONNX" node_modules/@huggingface/transformers/types/pipelines/feature-extraction.d.ts`; `npx tsx -e '(async () => { const { pipeline } = await import("@huggingface/transformers"); for (const id of ["onnx-community/all-MiniLM-L6-v2-ONNX", "Xenova/all-MiniLM-L6-v2"]) { const e = await pipeline("feature-extraction", id, { dtype: "fp32" }); const v = (await e(["payment data"], { pooling: "mean", normalize: true })).tolist()[0]; console.log(id, v.length, v.slice(0, 3)); } })()'` prints 384 for both, and first numbers that agree to six decimals
+- Checked: 2026-10-12
 
 ## The graph, the questions and the answer key
 

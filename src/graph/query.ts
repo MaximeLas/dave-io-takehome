@@ -8,9 +8,13 @@
 // - a failed query returns its error as a value, so the caller (the agent) can repair it;
 // - the server's warnings are returned too: naming a label or relationship type that does
 //   not exist is not an error in Cypher, it just matches nothing, and the warning is the
-//   only sign of the misspelling.
+//   only sign of the misspelling;
+// - a vector is shown as `<vector, 384 numbers>`: every node carries its description's
+//   embedding, Neo4j cannot hide a property from `properties(n)`, and one such row would
+//   otherwise spend thousands of tokens on numbers the model cannot read.
 import neo4j, { type Node, type Path, type Relationship } from "neo4j-driver";
 
+import { EMBEDDING_DIMENSIONS } from "../search/model.js";
 import { getDriver } from "./driver.js";
 
 export const MAX_ROWS = 100;
@@ -50,14 +54,17 @@ export async function runReadQuery(cypher: string): Promise<QueryResult> {
   }
 }
 
-// Converts a driver value into something compact and JSON-friendly. Graph objects are
-// summarised: a node by its type label, id and name (descriptions are long, so the caller
-// asks for `n.description` when it wants the text), a relationship by its type, a path by
-// its chain of nodes and arrows, with the arrow direction kept.
-function plain(value: unknown): unknown {
+/**
+ * Converts a driver value into something compact and JSON-friendly. Graph objects are
+ * summarised: a node by its type label, id and name (descriptions are long, so the caller
+ * asks for `n.description` when it wants the text), a relationship by its type, a path by
+ * its chain of nodes and arrows, with the arrow direction kept, and a vector by its length.
+ */
+export function plain(value: unknown): unknown {
   if (neo4j.isNode(value)) return nodeText(value);
   if (neo4j.isRelationship(value)) return `[${value.type}]`;
   if (neo4j.isPath(value)) return pathText(value);
+  if (isVector(value)) return `<vector, ${value.length} numbers>`;
   if (Array.isArray(value)) return value.map(plain);
   if (value instanceof Date) return value.toISOString();
   if (value !== null && typeof value === "object") {
@@ -84,6 +91,18 @@ function pathText(path: Path): string {
     text += nodeText(segment.end);
   }
   return text;
+}
+
+// A description vector: exactly as long as the model's output, and not all integers. Integers
+// arrive as plain numbers too (see driver.ts), so a long list the query computes, such as a
+// collected count, must not match.
+function isVector(value: unknown): value is number[] {
+  return (
+    Array.isArray(value) &&
+    value.length === EMBEDDING_DIMENSIONS &&
+    value.every((v) => typeof v === "number") &&
+    value.some((v) => !Number.isInteger(v))
+  );
 }
 
 function isPlainObject(value: object): boolean {
