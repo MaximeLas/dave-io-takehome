@@ -5,7 +5,7 @@
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "serve": "npm run build && node --env-file-if-exists=.env dist/src/server/main.js",
-    "test": "tsx --test eval/*.test.ts src/*/*.test.ts",
+    "test": "tsx --test --test-reporter=spec eval/*.test.ts src/*/*.test.ts",
     "check": "tsx --env-file-if-exists=.env scripts/check-setup.ts",
     "index": "tsx --env-file-if-exists=.env src/search/build-index.ts",
     "ask": "tsx --env-file-if-exists=.env scripts/ask.ts",

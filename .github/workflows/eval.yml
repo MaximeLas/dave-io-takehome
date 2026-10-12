@@ -77,14 +77,14 @@ jobs:
 
       - name: Score on the run page
         if: ${{ !cancelled() }}
-        # The per-question table and the verdict, from the line naming the model onwards; the
+        # The per-question table and the verdict, from the report's first line (the command) onwards; the
         # log's tail when the eval stopped before printing its table.
         run: |
           [ -f runs/eval.log ] || exit 0
           {
             echo '## Eval'
             echo '```'
-            if grep -q '^model ' runs/eval.log; then sed -n '/^model /,$p' runs/eval.log; else tail -n 40 runs/eval.log; fi
+            if grep -q '^command ' runs/eval.log; then sed -n '/^command /,$p' runs/eval.log; else tail -n 40 runs/eval.log; fi
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -18,8 +18,24 @@
 // no one else is reading.
 import { existsSync, readFileSync } from "node:fs";
 
+import { noArguments } from "../src/cli.js";
 import { closeDriver, getDriver } from "../src/graph/driver.js";
 import { embed } from "../src/search/embed.js";
+
+const COMMAND = "npx tsx --env-file-if-exists=.env scripts/measure-search.ts";
+noArguments(
+  `
+${COMMAND}
+Measures retrieval over node descriptions without the agent, on the labelled phrases in
+eval/search-dev-set.json: vectors against Neo4j's full-text index, the agent-style word lists,
+and the cutoffs. Writes a temporary full-text index while it runs, so use a database no one
+else is measuring.
+
+Options:
+  --help   print this help
+`,
+  COMMAND,
+);
 
 interface Phrase {
   query: string;

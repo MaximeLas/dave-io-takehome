@@ -8,6 +8,9 @@ import path from "node:path";
 
 import type { Diagnostics, Score } from "./score.js";
 
+/** A cost in US dollars printed in cents, the one unit every command prints; two digits where a gate compares two costs. */
+export const cents = (usd: number, digits = 1): string => `${(usd * 100).toFixed(digits)}c`;
+
 /** One question in one trial. `error` means the run never produced an answer to score (it threw or timed out). */
 export interface QuestionResult {
   id: string;
