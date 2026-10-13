@@ -12,13 +12,16 @@
 // eval/key-overlay.json holds the amended set; applyOverlay gives the amended key, and the eval
 // reports a second pass count against it. The gate reads the key alone.
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import type { RunRecord } from "../src/agent/record.js";
 
 /** The expected resource ids per question id, as expected.generated.json lists them. */
 export type AnswerKey = Record<string, string[]>;
 
-const KEY_FILE = new URL("./expected.generated.json", import.meta.url);
+// Both files are read relative to the working directory, the repo root, so the compiled server
+// under dist/ reads the same files as the commands run with tsx.
+const KEY_FILE = path.join("eval", "expected.generated.json");
 
 /** Loads the answer key: question id to expected ids. */
 export async function loadAnswerKey(): Promise<AnswerKey> {
@@ -31,7 +34,7 @@ export async function loadAnswerKey(): Promise<AnswerKey> {
 /** Amendments to the key, per question id: the amended expected ids, why, and the audit entry that argues it. */
 export type KeyOverlay = Record<string, { expected_resource_ids: string[]; reason: string; audit: string }>;
 
-const OVERLAY_FILE = new URL("./key-overlay.json", import.meta.url);
+const OVERLAY_FILE = path.join("eval", "key-overlay.json");
 
 /** Loads the key's overlay; an absent file is an empty overlay, so the eval runs the same without one. */
 export async function loadKeyOverlay(file: URL | string = OVERLAY_FILE): Promise<KeyOverlay> {

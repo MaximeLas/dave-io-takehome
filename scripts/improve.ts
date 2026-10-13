@@ -10,16 +10,12 @@
 // estimated cost is printed before it. Each judgement is saved to <id>.json as it lands, so a
 // failed call does not lose the ones paid for. The pipeline is in src/improve/; this file is the
 // command line around it.
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { loadQuestions } from "../eval/questions.js";
-import { cents, EVAL_RUNS_DIR } from "../eval/record.js";
-import { loadAnswerKey, loadKeyOverlay } from "../eval/score.js";
+import { cents } from "../eval/record.js";
 import { EFFORTS, MODEL_IDS, type Effort, type ModelId } from "../src/agent/agent.js";
-import { RUNS_DIR, type RunRecord } from "../src/agent/record.js";
-import { agentVersion } from "../src/agent/version.js";
 import { answerHelp, argsError, field, reportFailure, usageError } from "../src/cli.js";
 import { requireEnv } from "../src/env.js";
 import {
@@ -32,24 +28,11 @@ import {
   improveIdFor,
   isNoChange,
   judgedLine,
-  loadExperiments,
   saveImprove,
   type JudgedTrace,
 } from "../src/improve/improve.js";
-import {
-  agentInstructions,
-  auditEntry,
-  checkAgentVersion,
-  judgeMessage,
-  latestEvalId,
-  loadEvalRecord,
-  loadRunRecord,
-  proposerMessage,
-  recordSettings,
-  selectTraces,
-  traceSteps,
-} from "../src/improve/inputs.js";
-import { IMPROVER_PROMPT_VERSION, JUDGE_PROMPT, PROPOSER_PROMPT } from "../src/improve/prompt.js";
+import { ImproveRefused, NothingToDiagnose, prepareImprove } from "../src/improve/prepare.js";
+import { IMPROVER_PROMPT_VERSION } from "../src/improve/prompt.js";
 
 const COMMAND = "npm run improve";
 const DEFAULT_TRACES = 1;
@@ -111,43 +94,17 @@ if (!EFFORTS.includes(effort)) usage(`Unknown effort ${values.effort}; one of ${
 if (!Number.isInteger(perQuestion) || perQuestion < 1) usage("--traces is a whole number of traces per question, at least 1");
 
 try {
-  const evalId = values.eval ?? (await latestEvalId(EVAL_RUNS_DIR));
-  if (!evalId) usage(`No eval record under ${EVAL_RUNS_DIR}/; run npm run eval first, or pass --eval <evalId>`);
-  const record = await loadEvalRecord(EVAL_RUNS_DIR, evalId!);
-  if (!record) usage(`No eval record ${evalId} under ${EVAL_RUNS_DIR}/`);
-  const r = record!;
-
-  const questions = await loadQuestions();
-  const questionText = Object.fromEntries(questions.map((q) => [q.id, q.text]));
-  const key = await loadAnswerKey();
-  const selected = selectTraces(r, questionText, key, { only: values.question, perQuestion });
-  if ("problem" in selected) usage(selected.problem);
-  const { traces, failing } = selected as Exclude<typeof selected, { problem: string }>;
-  if (traces.length === 0) {
-    console.log(`Every question passed every trial of ${r.evalId}; nothing to diagnose.`);
-    process.exit(0);
-  }
-
-  const runs = new Map<string, RunRecord>();
-  for (const t of traces) {
-    const run = await loadRunRecord(RUNS_DIR, t.runId);
-    if (!run) usage(`Run record ${t.runId} is not under ${RUNS_DIR}/; an eval record from CI needs its artifact's files copied into ${RUNS_DIR}/`);
-    runs.set(t.runId, run!);
-  }
-  const mismatch = checkAgentVersion([...runs.values()], r);
-  if (mismatch) usage(mismatch);
-
-  const audit = await readFile(path.join("eval", "key-audit.md"), "utf8");
-  const overlay = await loadKeyOverlay();
-  const entries = new Map(traces.map((t) => [t.questionId, auditEntry(audit, t.questionId)]));
-  const noEntry = [...entries].filter(([, e]) => !e).map(([id]) => id);
-  if (noEntry.length > 0) throw new Error(`eval/key-audit.md has no entry for ${noEntry.join(", ")}`);
+  // Every check that can refuse the run, shared with the eval page.
+  const inputs = await prepareImprove({ evalId: values.eval, only: values.question, perQuestion, model, effort }).catch((error: unknown): never => {
+    if (error instanceof NothingToDiagnose) {
+      console.log(error.message);
+      process.exit(0);
+    }
+    if (error instanceof ImproveRefused) usage(error.message);
+    throw error;
+  });
   requireEnv("APP_ANTHROPIC_API_KEY");
-
-  const settings = recordSettings(runs.values().next().value!);
-  const instructions = agentInstructions(settings);
-  const experiments = await loadExperiments();
-  const version = agentVersion(settings);
+  const { record: r, traces, failing, agentVersion: version } = inputs;
   const estimate = traces.length * ESTIMATE_USD.perTrace + ESTIMATE_USD.proposal;
 
   console.log(
@@ -172,29 +129,7 @@ try {
 
   const result = await improve(
     {
-      record: r,
-      agentVersion: version,
-      traces: traces.map((trace) => {
-        const amendment = overlay[trace.questionId];
-        const run = runs.get(trace.runId)!;
-        return {
-          trace,
-          audit: entries.get(trace.questionId)!,
-          steps: traceSteps(run).length,
-          judgeUser: judgeMessage({
-            trace,
-            run,
-            evalId: r.evalId,
-            audit: entries.get(trace.questionId)!,
-            ...(amendment ? { amended: { ids: amendment.expected_resource_ids, reason: amendment.reason } } : {}),
-          }),
-        };
-      }),
-      failing,
-      judgeSystem: `${JUDGE_PROMPT}\n\n${instructions}`,
-      proposerSystem: `${PROPOSER_PROMPT}\n\n${instructions}`,
-      proposerUser: (judged) => proposerMessage({ record: r, agentVersion: version, judged, failing, experiments }),
-      settings: { model, effort },
+      ...inputs,
       onJudged: async (judged) => {
         landed = judged;
         await savePartial(judged);

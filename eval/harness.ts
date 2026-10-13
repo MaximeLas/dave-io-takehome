@@ -18,10 +18,11 @@
 // stopped container into thirty wrong answers. A question whose run throws or exceeds its
 // deadline is recorded as an error, never as a failed answer; transient API errors are
 // already retried inside the model client, so the harness adds no retry of its own.
-import { DEFAULT_EFFORT, DEFAULT_MODEL, type Effort, type ModelId } from "../src/agent/agent.js";
+import { DEFAULT_EFFORT, DEFAULT_MODEL, MAX_TOKENS, type Effort, type ModelId } from "../src/agent/agent.js";
 import { PROMPT_VERSION } from "../src/agent/prompt.js";
 import { saveRun } from "../src/agent/record.js";
 import { codeVersion, runAgent } from "../src/agent/run.js";
+import { agentVersion } from "../src/agent/version.js";
 import { assertGraphReady } from "../src/graph/health.js";
 import { loadResourceNames } from "../src/graph/names.js";
 import { SECOND_ROUND_RUNS, secondRoundEntrants } from "./baseline.js";
@@ -77,6 +78,7 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
     model,
     effort,
     promptVersion: PROMPT_VERSION,
+    agentVersion: agentVersion({ model, effort, maxTokens: MAX_TOKENS }),
     codeVersion: codeVersion(),
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
@@ -89,9 +91,10 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
 /**
  * Runs one question through the agent and scores it. The key and overlay are loaded once, and checked
  * against each other before any token is spent; the resources' names, which the prose check reads, come
- * from the graph once it is known to be ready.
+ * from the graph once it is known to be ready. The eval page runs a single question through it too, so a
+ * question run from the page is scored exactly as in an eval.
  */
-async function loadScorer(): Promise<(names: ResourceNames) => (question: Question, model: ModelId, effort: Effort) => Promise<QuestionResult>> {
+export async function loadScorer(): Promise<(names: ResourceNames) => (question: Question, model: ModelId, effort: Effort) => Promise<QuestionResult>> {
   const key = await loadAnswerKey();
   const overlay = await loadKeyOverlay();
   // Only the questions the overlay names get an amended score.

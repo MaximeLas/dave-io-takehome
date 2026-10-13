@@ -224,15 +224,20 @@ export function gate(run: EvalRun, baseline: Baseline | null, accepting: boolean
   }
 
   const comparison = compare(run, baseline);
+  const verdict = verdictLine(comparison);
+  if (accepting) return { comparison, exit: EXIT.ok, line: `ACCEPTING: against the baseline being replaced, ${verdict}` };
+  return { comparison, exit: EXIT[comparison.verdict], line: verdict };
+}
+
+/** The line a comparison ends on, from the comparison alone, so a record's stored comparison reads as the command printed it. */
+export function verdictLine(comparison: Comparison): string {
   const fmt = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
   const failed = [
     comparison.average.held ? "" : `rule 1 (average: mean ${fmt(comparison.average.value)} below the floor of ${fmt(comparison.average.limit)})`,
-    comparison.solid.held ? "" : `rule 2 (solid set: ${comparison.solid.broken.join(", ")} passed fewer than ${baseline.trials - 1} of ${baseline.trials})`,
+    comparison.solid.held ? "" : `rule 2 (solid set: ${comparison.solid.broken.join(", ")} passed fewer than ${comparison.trials - 1} of ${comparison.trials})`,
     comparison.cost.held ? "" : `rule 3 (cost: ${cents(comparison.cost.value, 2)} per trial above the ceiling of ${cents(comparison.cost.limit, 2)})`,
   ].filter(Boolean);
-  const verdict = failed.length === 0 ? "OK: all three rules held" : `REGRESSION: ${failed.join("; ")}`;
-  if (accepting) return { comparison, exit: EXIT.ok, line: `ACCEPTING: against the baseline being replaced, ${verdict}` };
-  return { comparison, exit: EXIT[comparison.verdict], line: verdict };
+  return failed.length === 0 ? "OK: all three rules held" : `REGRESSION: ${failed.join("; ")}`;
 }
 
 /**
