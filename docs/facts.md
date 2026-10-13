@@ -56,7 +56,7 @@ One line per fact, linked to its entry. The id is the handle: cite it, or search
 
 **[The eval gate](#the-eval-gate)**
 
-- **F27** [On unchanged code the gate is red about one run in nine, and red twice about one in twenty-five](#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-five): simulated from the committed baseline; the six-draw entry cuts rule 2's share from 14.8% to 4.5%; a floor, since its rates are at most six draws per question
+- **F27** [On unchanged code the gate is red about one run in nine, and red twice about one in twenty-seven](#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-seven): simulated from the committed baseline; the six-draw entry cuts rule 2's share from 14.8% to 4.5%; a floor, since its rates are at most six draws per question
 
 ## deepagents
 
@@ -291,7 +291,7 @@ On the configuration shipped until the business-area conventions (Haiku 5.5, eff
 
 What is known about the gate's own behaviour (`eval/baseline.ts`), as opposed to the agent it judges.
 
-### F27. On unchanged code the gate is red about one run in nine, and red twice about one in twenty-five
+### F27. On unchanged code the gate is red about one run in nine, and red twice about one in twenty-seven
 
 Judged by the three rules against the committed baseline (Haiku 5.5, effort high, accepted on `b0fb213` with the two-round accept), a later three-trial run of the same agent is red 11.1% of the time: rule 2 4.5%, from the two questions at 2 of 3 ("Which repository's code ends up on i-ecomm-dev-02?" and "Which instances can connect to rds-commerce-prod-4?") passing all six accept draws by luck and then failing two trials; rule 3 6.1%; rule 1 1.4%. A red run is red again on one re-run 3.7% of the time (3.9% with seed 2), not the square of 11%, because the re-run meets the same baseline: a wobbly question that entered the solid set is still in it. On the same input with the one-round entry the gate used before (`--rounds 1`, solid after the three trials alone), rule 2 is red 14.8%, any rule 19.9% and red twice 7.5%: the second round cuts rule 2's share to under a third, and rule 3 is now the largest source, from the deviation of the baseline's three costs (0.61c). The model behind the figures takes each question's pass rate as its passes out of its draws in the baseline (the three trials and its second-round runs), so a question at 6 of 6 never fails in the simulation and the rule 2 figure is a floor; the cost of a trial is a normal draw with the mean and deviation of the baseline's three costs. Each figure carries a Monte Carlo standard error of about 0.1 points.
 

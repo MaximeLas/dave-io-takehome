@@ -9,6 +9,7 @@ How the assignment in `README.md` was answered: the agent, how it is measured, w
 - CI runs three trials on every pull request and push to `main` and holds them to three rules against the baseline: the mean, the questions that passed all six draws of the accept, and the cost. A drop fails the build; a green run never moves the baseline.
 - Three questions fail on every run, and no line was written to win one question; three more wobble between runs, one of them at 0 of 3 in the baseline.
 - The key is audited: every answer re-derived from the graph with a query anyone re-runs ([`eval/key-audit.md`](eval/key-audit.md)). 28 of 30 agree, one is ambiguous, one is a key error, amended in an overlay; the eval prints the score against both (26, 26, 27 and 27, 27, 28 in one three-trial run), and the gate reads the key. The amended set is the conventions' own reading, which the agent follows, so the second score shows which misses remain the agent's; it is not evidence that the amendment is right.
+- Every metric beyond the pass is argued in [its own section](#what-is-measured-and-why): the failure it catches, how code computes it from the run record, why only the pass count and the cost gate, and the two checks designed next, whether each asserted id appears in what the agent read and whether the prose names the ids it asserts. No model judge is built; where one would enter, and what it needs first, is stated.
 - Next: the improvement loop (a judge on failing traces, a person picking one change, the eval measuring it), the production loop that grows the benchmark from real use, and a held-out reworded question set.
 
 **Contents**
@@ -17,12 +18,13 @@ How the assignment in `README.md` was answered: the agent, how it is measured, w
 2. [How this was built](#how-this-was-built): the rules, the facts ledger, the experiment files, the fingerprint, where to read
 3. [How the agent works](#how-the-agent-works): the tools, the conventions, the answer, the model
 4. [Retrieval](#retrieval-the-graph-first-meaning-search-beside-it): the vector index and what it was measured against
-5. [The eval, as error analysis](#the-eval-as-error-analysis): the scoring, the metrics, the four changes, how much rests on the key
-6. [The gate](#the-gate-what-it-guarantees-and-what-it-does-not): the three rules, the allowances, unlucky draws, gate versus accept
-7. [Known misses](#known-misses): including the two traps the README names
-8. [Current limitations](#current-limitations)
-9. [How I would take this further](#how-i-would-take-this-further)
-10. [Decisions](#decisions)
+5. [The eval, as error analysis](#the-eval-as-error-analysis): the scoring, the two scores, the four changes, how much rests on the key
+6. [What is measured, and why](#what-is-measured-and-why): each metric's failure, computation, gate and value, the two checks designed next, where a model judge would enter
+7. [The gate](#the-gate-what-it-guarantees-and-what-it-does-not): the three rules, the allowances, unlucky draws, gate versus accept
+8. [Known misses](#known-misses): including the two traps the README names
+9. [Current limitations](#current-limitations)
+10. [How I would take this further](#how-i-would-take-this-further)
+11. [Decisions](#decisions)
 
 To run it (details in [`AGENTS.md` § Running it](AGENTS.md#running-it)):
 
@@ -192,17 +194,7 @@ How a question is scored:
 
 **Two scores, one gate.** [`eval/key-audit.md`](eval/key-audit.md) re-derives every expected set from the graph, each with its reading, its Cypher query and a verdict; where it finds the key wrong, [`eval/key-overlay.json`](eval/key-overlay.json) holds the amended set and its reason, and the key file stays as received. `npm run eval` prints each amended question's passes against both, and both totals. The gate reads the key alone: it is the reviewers' reference, while the audit is this side's reading of it, with evidence anyone can re-run, and a test checks that the gate's verdict is the same with and without the overlay. One three-trial run of the shipped agent on 13 Oct passed 26, 26 and 27 against the key and 27, 27 and 28 against the amended key ([the experiment](eval/experiments/2026-10-13-key-audit.md)). The one amended set is the conventions' reading of that question, and the agent follows the conventions, so its passing is not evidence for the amendment; the argument in the audit entry is. What the second score adds is the count of misses that remain the agent's.
 
-**The metrics.** The README calls the key a reference, not the whole rubric, and asks what else is worth measuring. Three tiers:
-
-- **Gated today:** the pass count, by rules 1 and 2, and the cost per trial, by rule 3 ([the gate](#the-gate-what-it-guarantees-and-what-it-does-not)).
-- **Reported, not gated:**
-  - recall and precision, which say how a failing answer failed: an expected id missing, or one too many;
-  - empty answers, the runs that broke the answer contract;
-  - tool calls, Cypher errors and cut results (query results over the 100-row cap), which show how much work an answer took and how well its queries were written;
-  - duration.
-
-  Every run prints them; a three-trial run also prints every metric the trials store (recall, precision, the amended-key passes, empty answers, tool calls, Cypher errors, cut results and cost) as a mean per trial beside the baseline's (`metricDeltas` in `eval/baseline.ts`, whose type fails the build when a new metric is stored and not compared). They have earned their place: recall of about 90% against precision of 61 to 74% is what pointed to the first change below. A reported metric becomes a gate once it is steady across runs and has an agreed budget ([`AGENTS.md` § Scoring](AGENTS.md#scoring)).
-- **Not measured yet:** what the thirty cannot show. They are single turns of well-meant input in one wording, scored on `ids`, not on the prose the user reads. A held-out reworded set, a multi-turn set, an adversarial set and a judge for the prose would cover those (items 2 and 3 of [How I would take this further](#how-i-would-take-this-further)).
+**The metrics.** The pass decides the gate, and the other metrics say how an answer failed and what it cost; recall of about 90% against precision of 61 to 74% is what pointed to the first change below. Each metric, with the failure it catches, how it is computed, why it gates or not, and its value on the baseline, is in [What is measured, and why](#what-is-measured-and-why).
 
 **Why the harness is hand-built.** The README allows any framework, but the score is a set equality on ids, the gate is three rules over a JSON baseline committed in git, and every run's full trace is already a local record the run page lays out, so a hosted tracer such as LangSmith or Braintrust would add a second key and a service for what `runs/` and `eval/baselines/` already hold. One would earn its place with a model judge, whose verdicts need annotation queues for a person's labels, or with dashboards over many runs.
 
@@ -228,6 +220,109 @@ The business-area lines were also written from the failing traces. The variant t
 - **"Which resources are involved in fulfillment?"** went from 2 of 11 to 3 of 3.
 
 Both have passed every local trial of the shipped prompt recorded since.
+
+## What is measured, and why
+
+The README treats the key as a reference rather than the whole rubric, and says that deciding what else is worth measuring about an answer, and how, is part of the assignment. This section answers that: for each metric, the failure it catches, how it is computed and in which file, whether it gates and why, and its value on the committed baseline.
+
+**The practice this follows.** Two rules from the evals literature:
+
+- **Metrics come from error analysis, not from a list of generic scores.** Hamel Husain and Shreya Shankar's [evals FAQ](https://hamel.dev/blog/posts/evals-faq/) puts reading the failures before choosing what to measure. Every metric here was added because a failure was read in a trace, or because a question needs a number the thirty cannot give.
+- **Code first, a model where code cannot judge, people to validate.** Anthropic's [Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) names three kinds of grader (code, model, human) and recommends deterministic graders where possible and model graders where necessary. Every metric below is computed by code from the run record, with no model call; where a model judge would enter, and why none does yet, closes the section.
+
+**Gated or reported.** A metric gates once it is steady across runs and has an agreed budget ([`AGENTS.md` § Scoring](AGENTS.md#scoring)); until then it is printed, compared with the baseline, and read by a person. Two quantities meet that bar today, the pass count (rules 1 and 2) and the cost (rule 3), because a regression in this agent reaches a user or the bill as one of two things: a wrong answer, or a dearer one. Every run prints the rest per question and per trial; a three-trial run also prints every metric the trials store as a mean per trial beside the baseline's (`metricDeltas` in `eval/baseline.ts`, whose type fails the build when a new metric is stored and not compared).
+
+**Where the values come from.** "The baseline" is [`eval/baselines/claude-haiku-5-5.high.json`](eval/baselines/claude-haiku-5-5.high.json) (commit `8bf30c0`): three trials of the thirty questions on 13 Oct, Haiku 5.5 at effort high, prompt `1d555744`, code `b0fb213`. Its figures are given as the three trials in order.
+
+The metrics fall in five layers, in the order a question travels: does the search find the right descriptions; does the answer equal the key; is the answer backed by what the agent read, and does it say the same thing twice; what did the answer cost; and can the gate itself be trusted.
+
+### Retrieval, measured on its own
+
+**The practice:** the RAG triad ([TruLens](https://www.trulens.org/getting_started/core_concepts/rag_triad/)) splits the quality of a retrieval-augmented answer into context relevance, groundedness and answer relevance, so a failure can be placed in the retriever or in the generator. Retrieval is measured here apart from the agent for two reasons. In the eval's score, what the search returns is mixed with what the model does with it: the business-area traces showed the agent finding an area's resources and then dropping them ([business area](eval/experiments/2026-10-12-business-area.md)). And the thirty questions use the descriptions' own words, so they cannot show whether the search finds a description worded differently, which is its reason to exist.
+
+- **Catches:** a search that does not return the relevant descriptions, above all when the phrase uses words the descriptions do not.
+- **Computed:** `scripts/measure-search.ts` ranks the 79 descriptions for each of the 22 phrases of `eval/search-dev-set.json`, written and labelled by Claude Opus 5.5 from the descriptions alone, never the questions or the key: mean average precision (MAP), recall at the cutoff, and the share of relevant descriptions never returned, for vectors, Neo4j's full-text index and the agent's own word lists (`eval/search-word-lists.json`).
+- **Gated or reported:** neither in CI. It is a measurement for a design choice (the model, the cutoff), re-run when either changes; it writes a temporary index, so it runs on a database no one else is reading.
+- **Value** (12 Oct, [meaning search](eval/experiments/2026-10-12-meaning-search.md)): MAP 74% for vectors against 40% for full-text; with the vectors added to the agent's word lists, the relevant descriptions never returned fall from 20% to 9% and from 12% to 7%. [Retrieval](#retrieval-the-graph-first-meaning-search-beside-it) has the rest.
+
+### The answer against the key
+
+**The practice:** it is often better to grade what the agent produced than the path it took ([Demystifying evals](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)). The outcome here is a set of ids, so the grader is set arithmetic in `eval/score.ts` (`scoreAnswer`), with the ids a question names counting neither way ([F21](docs/facts.md#f21-the-answer-key-is-generated-by-a-script-outside-this-repository)).
+
+| Metric | The failure it catches | Computed | Gated or reported, and why | Baseline |
+| --- | --- | --- | --- | --- |
+| Pass (exact match) | Any wrong answer: an expected id missing, or one too many | The asserted ids equal the expected ids | Gated, rules 1 and 2: it is the answer a user acts on | 24, 26, 26 of 30 |
+| Recall | How a miss missed: expected ids left out | Share of expected ids asserted, mean over the non-empty answers | Reported: a drop already fails a question, which the pass gates | 95%, 94%, 94% |
+| Precision | Padding: ids beyond the expected | Share of asserted ids that were expected, same mean | Reported, as recall | 94%, 97%, 97% |
+| Empty answers | The answer contract broken: no `final_answer` call | The record's answer is empty; it fails the pass, even against an empty key | Reported: the pass already counts it as a failure | 0, 0, 0 |
+| Passes against the amended key | Which misses remain the agent's once the key's one error is set aside | The same grader, with `eval/key-overlay.json` applied | Reported, never gated: the amendment is this side's reading ([Two scores, one gate](#the-eval-as-error-analysis)) | 25, 27, 27 |
+
+Exact match is stricter than recall on purpose: an answer padded with the eight workflows it checked says yes to a question whose answer is none ([decisions](docs/decisions.md#why-exact-match-on-ids-and-not-recall-above-a-threshold)). Recall and precision earn their place as diagnosis: on 11 Oct, recall of about 90% beside precision of 61 to 74% (three runs, [the `ids` rule](eval/experiments/2026-10-11-ids-rule.md)) said the answers found what the key expects and claimed more, which named the first change. Gated, they would only restate the pass with a threshold to argue over, and as means over non-empty answers they rise when an agent answers fewer questions.
+
+### The answer against the evidence, and against itself: designed, not yet built
+
+Everything above compares the answer with the key. Nothing yet compares it with the evidence the agent read, or the `ids` with the prose the user reads. These are the next two checks, designed here and not yet in the report; the next change adds them, and their values, as code checks on every run.
+
+**The practice:** groundedness in the RAG triad and faithfulness in [RAGAS](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/faithfulness/) split an answer into claims and check each against the retrieved context, usually with a model doing both steps. Here the claims are ids and the evidence is the tool output the run record stores verbatim, so the same check can be code, exact and free.
+
+**Grounded ids.**
+
+- **Catches:** an id the agent asserted without having read it. [Maynez et al. (ACL 2020)](https://aclanthology.org/2020.acl-main.173/) separate content that manipulates what the source says (intrinsic) from content added that the source does not support (extrinsic). An id that appears in no tool output of the run is the second kind: built from a naming pattern, or assumed without a query that returned it. A real id the question did not warrant, such as a hop on the path listed beside the answer, is a reasoning error instead. Precision counts both as one extra id; the check separates them, which matters because the fixes differ: the first wants evidence (query before asserting), the second instructions (what the question asks for). It also sees what exact match cannot: a passing answer whose right id was guessed.
+- **Computed:** every id in `ids` must appear in the output of at least one tool call of the same run (`toolCalls[].output` in the record: `run_cypher` prints the values a query returns, ids included when it returns them, and `search_descriptions` lists the ids of every resource carrying each description). An id the agent only inferred, from a name or a pattern, is flagged even when it is right, which is the point. Reported per run as the ungrounded ids, under the row as missing and extra ids are; per trial as the runs with any ungrounded id and the ungrounded ids in all; independent of pass or fail. An id seen only beyond the 100-row cap was not seen, and is flagged.
+- **Gated or reported:** reported, measured from the first baseline that stores it, gated only once steady and budgeted, the rule every metric here follows.
+
+**Prose and `ids` agree.**
+
+- **Catches:** an id asserted silently, scored by the eval and shown in the chat as a tag, but never explained in the prose. Computed as the share of asserted ids that the prose names, by full id or by the id's last segment, per run and as a mean per trial; 1 when `ids` is empty. It is cheap and narrow; its larger use is to bound the judge below, since every run under 1 is a candidate disagreement found without a model call.
+- **What it cannot catch:** the disagreement actually seen. On "Do any GitHub workflows deploy directly to a database?", failing trials put the eight deploy workflows in `ids` while the prose named them as ruled out ([Known misses](#known-misses)); on "If messages in the production order queues keep failing, where do they end up?", failing trials added the source queues while the prose was right ([meaning search](eval/experiments/2026-10-12-meaning-search.md)); and the other way round, "What is the compute stack in my dev env?" names its target groups in the prose and leaves them out of `ids` ([business area](eval/experiments/2026-10-12-business-area.md)). A prose that names what was checked, as the answer contract asks, names ids it ruled out, so code can see that an id is named but not whether the prose asserts it ([decisions](docs/decisions.md#why-does-the-answer-come-through-a-tool-call-with-separate-ids-and-not-as-prose)). That remainder is the first candidate for a model judge (below). Matching has two known sources of false flags: prose that abbreviates a run of names as a range ("i-ecomm-dev-01 to -08"), and the 32 resources whose name is not the id's last segment ([F20](docs/facts.md#f20-an-ids-last-segment-is-not-always-the-resources-name)).
+- **Gated or reported:** reported, as grounded ids.
+
+### The work
+
+**The practice:** Anthropic's [Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents) recommends collecting, beside accuracy, the runtime of tool calls and tasks, the number of tool calls, the token consumption and the tool errors. All four are in every run record (`src/agent/record.ts`); tokens are reported as cost, tokens priced at the published rates. They are read off the record by `diagnostics()` in `eval/score.ts`.
+
+| Metric | The failure it catches | Computed | Gated or reported, and why | Baseline |
+| --- | --- | --- | --- | --- |
+| Cost | The agent getting dearer for the same answers | Tokens of every model call times the published price (`costUsd`) | Gated, rule 3: a property of the agent, paid on every question in production | 9.33, 8.28, 8.27 cents a trial; ceiling 9.69 |
+| Tool calls | An answer that wanders, or rediscovers the schema each time | Calls in the record | Reported: the per-trial spread is wide (176, 157 and 162 in one three-trial run, [meaning search](eval/experiments/2026-10-12-meaning-search.md)), and what extra calls cost shows in rule 3 | 164, 160, 169 (about 5.5 a question) |
+| Cypher errors | Queries the database refused, which the model then repairs | Calls flagged as errors | Reported: a repaired query is not a wrong answer | 4, 0, 5 |
+| Cut results | Queries asking for more than the 100-row cap | Outputs that open "n of m rows shown" | Reported, as Cypher errors | 0, 2, 2 |
+| Duration | A slow answer | Wall time of the run | Reported: it depends on the machine and the API's load as well as on the agent | Not stored in the baseline; about 11 seconds a question at the median in the 12 Oct baseline's 90 runs (from the local run records) |
+| Stop reason | A run cut at the token limit, or ending in prose | The last model call's stop reason | Reported beside each empty answer, where it says why | No empty answer in the baseline |
+
+Cost gates and time does not because cost is the agent's own (its tokens at a fixed price), while time on a CI runner and on a laptop differ for the same agent.
+
+Designed, not yet built, in this layer:
+
+- **Search calls per question,** the over- and under-triggering the Anthropic evals post asks to test: whether the agent searches when a question names a purpose, and leaves the search alone when the graph's structure answers. Today it is known from two local runs only: the search was called on the same 8 of the 30 questions, each naming a purpose, never on a path, permission or count question ([meaning search](eval/experiments/2026-10-12-meaning-search.md)). Counted from the tool names in the record, it needs no change to the record.
+- **The tail of the duration,** the slowest tenth of a trial's runs, which is what a chat user waits on, stored per trial so it is compared with the baseline. Reported, never gated, for the reason above.
+
+### The gate's own statistics
+
+**The practice:** an eval's numbers carry error bars, and two agents are best compared question by question, as paired differences ([Miller, Adding Error Bars to Evals](https://arxiv.org/abs/2411.00640)). The gate is itself measured: `npm run simulate-gate` simulates pairs of an accept and a later run of the same agent from the baseline's per-question pass rates, and reports how often unchanged code turns the gate red. On the baseline, about one run in nine, and red again on one re-run about one in twenty-seven ([F27](docs/facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-seven)). Rule 2's entry to the solid set, six passes in six draws, is the observed form of what the Anthropic post calls pass^k, every one of k trials succeeding, while rule 1 reads the mean. The figures, what they rest on and the paired comparison not yet built are in [the gate](#the-gate-what-it-guarantees-and-what-it-does-not).
+
+### Where a model judge would enter, and why none does yet
+
+**The practice:** a model judge is for what code cannot check; one judge per failure mode; a binary pass or fail, never a 1-to-5 scale; and before it is trusted, it is checked against a domain expert's labels, with its true positive and true negative rates reported separately, since raw agreement misleads when one verdict is rare (Husain, [Using LLM-as-a-Judge](https://hamel.dev/blog/posts/llm-judge/), and the FAQ above). Labelling outputs also changes what the labeller thinks the criteria are, which Shankar et al. call criteria drift ([Who Validates the Validators?](https://arxiv.org/abs/2404.12272), 2024), so the labels come before the judge's prompt is frozen.
+
+Three judges are placed, each binary, each on one failure mode:
+
+1. **Prose and `ids` assert the same set:** the remainder of the code check above, on both directions it has been seen in.
+2. **The prose serves its reader,** three binary criteria: it answers the question asked, in the form that user needs, and names what was checked ([further, item 3](#how-i-would-take-this-further)).
+3. **Where a failing trace went wrong,** read against the key audit, inside the improvement loop; it proposes, a person decides, and it never gates ([further, item 1](#how-i-would-take-this-further)).
+
+None is built because none can be trusted yet: each needs a set of runs labelled by a person, both verdicts represented, and no such set exists. An unvalidated judge in the gate would fail builds on its own errors. Until then the ids contract carries correctness, and the code checks above narrow what a judge would have to cover.
+
+### Considered and not built
+
+- **Text similarity of the prose** to a reference answer (BLEU, ROUGE, embedding similarity): there is no reference prose, and the prose may rightly vary; the contract the eval scores is `ids`.
+- **Scores on a scale** from a model judge: a 3 or a 4 says nothing a person can act on, and binary verdicts are labelled more consistently, which is why the practice above says binary.
+- **A model judge of groundedness:** the claims are ids and the evidence is stored text, so code is exact where a judge would only be likely.
+- **Partial credit per question** (an F1 score): a second threshold to argue over; recall and precision are printed instead ([decisions](docs/decisions.md#why-exact-match-on-ids-and-not-recall-above-a-threshold)).
+- **Gating recall, precision, tool calls or duration:** the first two restate the pass, the third is noisy and priced by rule 3, the fourth is bound to the machine.
+- **A judge for the README's two traps:** the key audit answers both with queries anyone re-runs ([Known misses](#known-misses)).
+
+What the thirty questions cannot show at all (other wordings, follow-up turns, hostile input) is for sets of their own, in [How I would take this further](#how-i-would-take-this-further), item 3.
 
 ## The gate: what it guarantees and what it does not
 
@@ -257,7 +352,7 @@ In questions, against that baseline:
 
 A tolerance from one accept is a simplicity trade. Rejected: a hand-set tolerance, which turns each accept into an argument instead of a measurement; and more accept trials, which cost more per accept and are [a next step](#how-i-would-take-this-further).
 
-**Unlucky draws.** Rule 2 has no allowance, so a question that usually passes and enters the solid set by luck turns the gate red on code that did not change. It happened twice on 13 Oct, on a pull request that changed only documentation: "Which instances would a deploy to the auto scaling group hit?" passed 1 of 3 in [CI run 38314893054](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38314893054), then "Do any GitHub workflows deploy directly to a database?" passed 1 of 3 in [run 38319345402](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38319345402), two of its trials listing the eight deploy workflows they had checked as the answer to a question whose answer is none; each re-run went green. The solid set was then earned over three draws; it is now earned over six, which cuts the chance that a question at 75% enters by luck from 42% to 18%. Simulated on the current baseline (`npm run simulate-gate`, `scripts/simulate-gate.ts`: 100,000 pairs of an accept and a later three-trial run of the same agent, seed 1, each question passing at its rate in the baseline file; [F27](docs/facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-five)), on the same input:
+**Unlucky draws.** Rule 2 has no allowance, so a question that usually passes and enters the solid set by luck turns the gate red on code that did not change. It happened twice on 13 Oct, on a pull request that changed only documentation: "Which instances would a deploy to the auto scaling group hit?" passed 1 of 3 in [CI run 38314893054](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38314893054), then "Do any GitHub workflows deploy directly to a database?" passed 1 of 3 in [run 38319345402](https://github.com/MaximeLas/dave-io-takehome/actions/runs/38319345402), two of its trials listing the eight deploy workflows they had checked as the answer to a question whose answer is none; each re-run went green. The solid set was then earned over three draws; it is now earned over six, which cuts the chance that a question at 75% enters by luck from 42% to 18%. Simulated on the current baseline (`npm run simulate-gate`, `scripts/simulate-gate.ts`: 100,000 pairs of an accept and a later three-trial run of the same agent, seed 1, each question passing at its rate in the baseline file; [F27](docs/facts.md#f27-on-unchanged-code-the-gate-is-red-about-one-run-in-nine-and-red-twice-about-one-in-twenty-seven)), on the same input:
 
 | Entry to the solid set | Rule 2 red | Any rule red | Red again on one re-run |
 | --- | --- | --- | --- |
@@ -354,13 +449,13 @@ Two loops first: one that improves the agent from its failing traces, one that g
 
 2. **The production loop.** Every chat turn already saves its full trace under `runs/`, with its cost, duration, tool calls and whether it ended without an answer. Each week I would sample those traces, note the first error in each, group the notes into failure modes and count them: the error analysis of the eval section, run on real use. Each new failure mode becomes an eval question, so the benchmark grows from what users ask instead of staying the thirty questions handed over.
 
-   A model judge enters only for a failure mode that code cannot check. The first candidate is whether the prose agrees with the `ids`: code can check that every id in `ids` appears in the prose, but not whether the prose asserts the same set, since it also names what was ruled out (decision 3). Any judge is checked against a person's labels before it gates.
+   A failure mode code can check gets a code check; one it cannot, such as the prose asserting a different set from the `ids`, gets a model judge, validated first ([where a judge would enter](#where-a-model-judge-would-enter-and-why-none-does-yet)). The sampled traces are also where the labels such a judge needs would come from.
 
 3. **The eval's blind spots.** The thirty questions test one wording of each question, single turns and well-meant input. Four additions would cover the rest, each with its own labelled set:
    - **A held-out reworded set:** the same intents in words the agent never saw, with its own key, never used to choose a change. It answers "what would this agent score on questions it never saw", which the thirty cannot, since three readings were taken from their key. It is also where a gain in robustness to wording would show, such as the search's lead on paraphrases in the offline measurement; the thirty could not show it.
    - **A multi-turn set** checking the answer contract on follow-up turns: a second question that leans on the first ("and which of those are in prod?") still ends in a `final_answer` call whose `ids` answer it.
    - **An adversarial set** of injection, off-topic and harmful input, behind a cheap first-pass classifier that can be switched off in development. The set is read both ways: what the guard lets through, and which of the thirty it wrongly refuses.
-   - **An answer-quality judge** for the prose the user reads, whose priority depends on who the user is: an engineer reading ids needs less from the prose than an external user. Its verdict is binary on each of three criteria: it answers the question asked, in the form that user needs, and names what was checked. Its false passes and false fails are measured against a person's labels before it gates anything.
+   - **An answer-quality judge** for the prose the user reads, whose priority depends on who the user is: an engineer reading ids needs less from the prose than an external user. Its verdict is binary on each of three criteria: it answers the question asked, in the form that user needs, and names what was checked; it is validated as [the judges' section](#where-a-model-judge-would-enter-and-why-none-does-yet) says before it gates anything.
 
 4. **The gate's statistics.** Three changes to what the gate can see:
    - **A paired comparison.** Compare each question with its own baseline count and count the questions that flipped each way, instead of comparing two means. A hard question is hard on both sides, so question-to-question difficulty cancels and the same ninety runs detect a smaller change; this is Evan Miller's recommendation, cited in the gate section.
