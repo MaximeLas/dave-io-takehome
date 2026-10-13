@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { loadQuestions } from "./questions.js";
-import { applyOverlay, diagnostics, loadAnswerKey, loadKeyOverlay, scoreAnswer } from "./score.js";
+import { applyOverlay, checkAnswer, diagnostics, loadAnswerKey, loadKeyOverlay, scoreAnswer } from "./score.js";
 import type { RunRecord } from "../src/agent/record.js";
 
 const key = await loadAnswerKey();
@@ -122,23 +122,150 @@ test("the committed overlay: an absent file reads as empty, and each entry names
   for (const q of questions) assert.ok(scoreAnswer({ answer: "x", ids: amended[q.id]! }, amended[q.id]!, q.text).pass, q.id);
 });
 
-test("diagnostics count Cypher errors and cut results off the record", () => {
+test("diagnostics count search calls, Cypher errors and cut results off the record", () => {
   const record = {
     durationMs: 1200,
     costUsd: 0.01,
-    stopReasons: ["tool_use", "tool_use", "end_turn"],
+    stopReasons: ["tool_use", "tool_use", "tool_use", "end_turn"],
     toolCalls: [
+      { name: "search_descriptions", input: { query: "payment data" }, output: "10 of 79 descriptions shown", isError: false },
       { name: "run_cypher", input: {}, output: "3 rows\ncolumns: id\na\nb\nc", isError: false },
       { name: "run_cypher", input: {}, output: "Cypher error: Invalid input", isError: true },
       { name: "run_cypher", input: {}, output: "100 of 251 rows shown. Narrow the query.", isError: false },
     ],
   } as unknown as RunRecord;
   assert.deepEqual(diagnostics(record), {
-    toolCalls: 3,
+    toolCalls: 4,
+    searchCalls: 1,
     cypherErrors: 1,
     cutResults: 1,
     durationMs: 1200,
     costUsd: 0.01,
     stopReason: "end_turn",
   });
+});
+
+// The answer against the evidence and against itself, on hand-made records shaped like the tools' output.
+const names = new Map([
+  ["aws:sqs:queue-commerce-prod-1", "queue-commerce-prod-1"],
+  ["aws:sqs:queue-commerce-prod-13", "queue-commerce-prod-13"],
+  ["aws:sqs:queue-commerce-prod-14", "queue-commerce-prod-14"],
+  ["aws:sqs:queue-commerce-prod-15", "queue-commerce-prod-15"],
+  ["aws:sqs:queue-commerce-prod-16", "queue-commerce-prod-16"],
+  ["aws:rds:rds-commerce-prod-14", "rds-commerce-prod-14"],
+  ["aws:s3:bucket-commerce-prod-1", "bucket-commerce-prod-1"],
+  ["aws:s3-policy:bucket-commerce-prod-1", "bucket-commerce-prod-1-policy"],
+  ["datadog:monitor:commerce-5", "commerce-prod-monitor-5"],
+]);
+const cypher = (output: string) => ({ name: "run_cypher", input: { query: "MATCH ..." }, output, isError: false });
+const QUEUES = [
+  "4 rows",
+  "columns: id | name",
+  "aws:sqs:queue-commerce-prod-13 | queue-commerce-prod-13",
+  "aws:sqs:queue-commerce-prod-14 | queue-commerce-prod-14",
+  "aws:sqs:queue-commerce-prod-15 | queue-commerce-prod-15",
+  "aws:sqs:queue-commerce-prod-16 | queue-commerce-prod-16",
+].join("\n");
+const answer = (ids: string[], prose: string, outputs: string[] = [QUEUES]) => ({ ids, answer: prose, toolCalls: outputs.map(cypher) });
+const ASK = "Which queues are dead-letter queues?";
+
+test("grounded: an id a tool printed is grounded, an id never printed is not, whether or not the answer passes", () => {
+  assert.deepEqual(checkAnswer(answer(["aws:sqs:queue-commerce-prod-13", "aws:sqs:queue-commerce-prod-14"], "x"), names, ASK).ungrounded, []);
+  // The same pattern, one number further: in no output of the run, so built, not read.
+  const built = checkAnswer(answer(["aws:sqs:queue-commerce-prod-13", "aws:sqs:queue-commerce-prod-17"], "x"), names, ASK);
+  assert.deepEqual(built.ungrounded, ["aws:sqs:queue-commerce-prod-17"]);
+  // A prefix of a printed id is not that id.
+  assert.deepEqual(checkAnswer(answer(["aws:sqs:queue-commerce-prod-1"], "x"), names, ASK).ungrounded, ["aws:sqs:queue-commerce-prod-1"]);
+  // A name read without its id: the id's prefix was assumed, so the id is flagged even though it is right.
+  const nameOnly = "1 row\ncolumns: name\nbucket-commerce-prod-1";
+  assert.deepEqual(checkAnswer(answer(["aws:s3:bucket-commerce-prod-1"], "x", [nameOnly]), names, ASK).ungrounded, ["aws:s3:bucket-commerce-prod-1"]);
+});
+
+test("grounded: both tools count, a label before the id does not hide it, and a query's own text is not evidence", () => {
+  const search = {
+    name: "search_descriptions",
+    input: { query: "failed messages" },
+    output: "1 of 79 descriptions shown, best first, covering 2 resources.\n0.61 | Dead-letter queue. | aws:sqs:queue-commerce-prod-13, aws:sqs:queue-commerce-prod-14",
+    isError: false,
+  };
+  assert.deepEqual(checkAnswer({ ids: ["aws:sqs:queue-commerce-prod-14"], answer: "x", toolCalls: [search] }, names, ASK).ungrounded, []);
+  const labelled = '1 row\ncolumns: chain\n["Entity:aws:sqs:queue-commerce-prod-13"]';
+  assert.deepEqual(checkAnswer(answer(["aws:sqs:queue-commerce-prod-13"], "x", [labelled]), names, ASK).ungrounded, []);
+  const asked = { name: "run_cypher", input: { query: "MATCH (q {id: 'aws:sqs:queue-commerce-prod-15'}) RETURN count(q)" }, output: "1 row\ncolumns: count(q)\n1", isError: false };
+  assert.deepEqual(checkAnswer({ ids: ["aws:sqs:queue-commerce-prod-15"], answer: "x", toolCalls: [asked] }, names, ASK).ungrounded, ["aws:sqs:queue-commerce-prod-15"]);
+});
+
+test("grounded: an error that quotes the failing query, or another tool echoing the model, is not evidence", () => {
+  const failed = {
+    name: "run_cypher",
+    input: { query: "MATCH (q {id:'aws:sqs:queue-commerce-prod-15'}) RETURN q UNION ALL MATCH (t)" },
+    output: `Cypher error: All sub queries in an UNION must have the same return column names (line 1, column 50)\n"MATCH (q {id:'aws:sqs:queue-commerce-prod-15'}) RETURN q UNION ALL MATCH (t)"`,
+    isError: true,
+  };
+  const echo = { name: "read_file", input: { path: "notes" }, output: "aws:sqs:queue-commerce-prod-15", isError: false };
+  for (const call of [failed, echo]) {
+    assert.deepEqual(checkAnswer({ ids: ["aws:sqs:queue-commerce-prod-15"], answer: "x", toolCalls: [call] }, names, ASK).ungrounded, ["aws:sqs:queue-commerce-prod-15"], call.name);
+  }
+});
+
+test("grounded and prose: the ids the question names count neither way, as in the pass", () => {
+  const c = checkAnswer(answer(["aws:sqs:queue-commerce-prod-1", "aws:sqs:queue-commerce-prod-13"], "queue-commerce-prod-13"), names, "Where do failed messages from queue-commerce-prod-1 go?");
+  assert.deepEqual(c, { ungrounded: [], proseNamed: 1 });
+});
+
+test("prose: the share of asserted ids the prose names, by id or by the graph's name; 1 when nothing is asserted", () => {
+  const ids = ["aws:sqs:queue-commerce-prod-13", "aws:sqs:queue-commerce-prod-14", "aws:s3:bucket-commerce-prod-1", "datadog:monitor:commerce-5"];
+  const prose = "aws:sqs:queue-commerce-prod-13: one; queue-commerce-prod-14, bucket-commerce-prod-1 and commerce-prod-monitor-5.";
+  assert.equal(checkAnswer(answer(ids, prose), names, ASK).proseNamed, 1);
+  assert.equal(checkAnswer(answer(ids, "Four resources match."), names, ASK).proseNamed, 0);
+  // A monitor's id ends in `commerce-5`, its name is `commerce-prod-monitor-5`; a bucket is not named by its policy.
+  assert.equal(checkAnswer(answer(["datadog:monitor:commerce-5"], "commerce-5 alerts."), names, ASK).proseNamed, 0);
+  assert.equal(checkAnswer(answer(["aws:s3:bucket-commerce-prod-1"], "bucket-commerce-prod-1-policy, aws:s3-policy:bucket-commerce-prod-1."), names, ASK).proseNamed, 0);
+  assert.equal(checkAnswer(answer(["aws:sqs:queue-commerce-prod-1"], "queue-commerce-prod-13"), names, ASK).proseNamed, 0);
+  assert.equal(checkAnswer(answer(ids, "queue-commerce-prod-13 and bucket-commerce-prod-1."), names, ASK).proseNamed, 0.5);
+  assert.equal(checkAnswer(answer([], "No queue matches."), names, ASK).proseNamed, 1);
+});
+
+test("prose: a family named once in full and abbreviated after counts, in a list or a range; without a full sibling it does not", () => {
+  const four = ["aws:sqs:queue-commerce-prod-13", "aws:sqs:queue-commerce-prod-14", "aws:sqs:queue-commerce-prod-15", "aws:sqs:queue-commerce-prod-16"];
+  const abbreviated = [
+    "queue-commerce-prod-13, -14, -15 and -16.",
+    "queue-commerce-prod-13, prod-14, prod-15 and prod-16.",
+    "queue-commerce-prod-13 to -16.",
+    "queue-commerce-prod-13 through prod-16.",
+    "queue-commerce-prod-13–16.",
+    "aws:sqs:queue-commerce-prod-13, prod-14, prod-15 and prod-16.",
+    "queues (queue-commerce-prod-13, 14, 15 and 16).",
+    "queue-commerce-prod-12 is watched; the others are prod-13, 14, 15 and 16.",
+    "aws:sqs:queue-commerce-prod-13 through aws:sqs:queue-commerce-prod-16.",
+    "queue-commerce-prod-13 and -14 (dead-letter), -15 and -16 (unused).",
+    "`queue-commerce-prod-13`, `-14`, `-15` and `-16`.",
+  ];
+  for (const prose of abbreviated) assert.equal(checkAnswer(answer(four, prose), names, ASK).proseNamed, 1, prose);
+  assert.equal(checkAnswer(answer(four, "The dead-letter queues are prod-13 to prod-16."), names, ASK).proseNamed, 0);
+  // A family abbreviated by its id rather than its name.
+  const monitors = new Map([...names, ["datadog:monitor:commerce-6", "commerce-prod-monitor-6"]]);
+  assert.equal(checkAnswer(answer(["datadog:monitor:commerce-5", "datadog:monitor:commerce-6"], "datadog:monitor:commerce-5, -6."), monitors, ASK).proseNamed, 1);
+  // Another family's member does not name this one.
+  assert.equal(checkAnswer(answer(["aws:sqs:queue-commerce-prod-14"], "queue-commerce-prod-13 and rds-commerce-prod-14."), names, ASK).proseNamed, 0);
+  // A range or a list counts only in a run that starts at the family: not another family's, not a loose one.
+  const dev = new Map([...names, ["aws:sqs:queue-commerce-dev-2", "queue-commerce-dev-2"], ["aws:sqs:queue-commerce-dev-1", "queue-commerce-dev-1"]]);
+  const loose = [
+    "queue-commerce-dev-1 is reached; prod queues 1 to 16 are too.",
+    "queue-commerce-dev-1 and queue-commerce-prod-1 to prod-16.",
+    "queue-commerce-dev-1, then 1 to 6 hops.",
+    "queue-commerce-dev-1, -5 and prod-2.",
+  ];
+  for (const prose of loose) assert.equal(checkAnswer(answer(["aws:sqs:queue-commerce-dev-2"], prose), dev, ASK).proseNamed, 0, prose);
+  assert.equal(checkAnswer(answer(["aws:sqs:queue-commerce-dev-2"], "queue-commerce-dev-1 to dev-4."), dev, ASK).proseNamed, 1);
+  // A run may start at the id and end at the name.
+  assert.equal(checkAnswer(answer(["aws:sqs:queue-commerce-dev-2"], "aws:sqs:queue-commerce-dev-1 through queue-commerce-dev-4."), dev, ASK).proseNamed, 1);
+});
+
+test("the key's own ids, printed by a tool and listed in the prose, are grounded and named on every question", () => {
+  for (const q of questions) {
+    const ids = key[q.id]!;
+    const c = checkAnswer(answer(ids, ids.join(", "), [`${ids.length} rows\ncolumns: id\n${ids.join("\n")}`]), new Map(), q.text);
+    assert.deepEqual(c, { ungrounded: [], proseNamed: 1 }, q.id);
+  }
 });

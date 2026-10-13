@@ -125,8 +125,10 @@ const legend = (compared: boolean, amended: boolean) => [
   ...(compared ? [field(`(n/${BASELINE_TRIALS})`, "beside passed: the same question's passes in the baseline")] : []),
   ...(amended ? [field("[n/t]", "beside passed: passes against the key as eval/key-overlay.json amends it (eval/key-audit.md); not gated")] : []),
   field("exp", "ids the answer key expects"),
-  field("the rest", "means per answered run: recall, precision, time, cost, tool calls"),
-  field("err, cut", "beside the tool calls, only when nonzero: Cypher errors, results cut short"),
+  field("the rest", "means per answered run: recall, precision, prose, time, cost, tool calls"),
+  field("prose", "share of the asserted ids the prose names, by id, name or a family's short form"),
+  field("search, …", "beside the tool calls, only when nonzero: search calls, Cypher errors, results cut short"),
+  field("ungrounded", "under a row, in any trial, passed or not: asserted ids that no tool output of the run showed"),
 ];
 const ID_WIDTH = Math.max(...questions.map((q) => q.id.length));
 // A question the overlay amends carries an amended pass in every trial that produced an answer.
@@ -138,35 +140,40 @@ const passedText = (q: QuestionTrials, baselinePasses: number | undefined) =>
 
 // The table's header row, its columns aligned with row()'s.
 function header(passedWidth: number): string {
-  return `${"question".padEnd(ID_WIDTH)}  ${"passed".padEnd(passedWidth)}  exp  recall  prec  time  cost  tool calls`;
+  return `${"question".padEnd(ID_WIDTH)}  ${"passed".padEnd(passedWidth)}  exp  recall  prec  prose  time  cost  tool calls`;
 }
 
 // One question across the trials: its pass count, the means of what the answered trials measured, then a line per trial that did not pass.
 // The tool-call count, whose length varies, comes last, so the columns before it stay aligned.
 function row(q: QuestionTrials, baselinePasses: number | undefined, passedWidth: number): string[] {
-  const answered = q.results.filter((r) => r.score && r.diagnostics);
+  const answered = q.results.filter((r) => r.score && r.checks && r.diagnostics);
   const avg = (pick: (d: Diagnostics) => number) => mean(answered.map((r) => pick(r.diagnostics!)));
   const expected = answered[0]?.score?.expected;
   const nonEmpty = answered.filter((r) => !r.score!.empty);
   let line = `${q.id.padEnd(ID_WIDTH)}  ${passedText(q, baselinePasses).padEnd(passedWidth)}`;
   if (answered.length > 0) {
+    const search = avg((d) => d.searchCalls)!;
     const errors = avg((d) => d.cypherErrors)!;
     const cut = avg((d) => d.cutResults)!;
     line +=
       `  ${String(expected).padStart(3)}` +
       `  ${pct(mean(nonEmpty.map((r) => r.score!.recall))).padStart(6)}  ${pct(mean(nonEmpty.map((r) => r.score!.precision))).padStart(4)}` +
+      `  ${pct(mean(nonEmpty.map((r) => r.checks!.proseNamed))).padStart(5)}` +
       `  ${seconds(avg((d) => d.durationMs)!).padStart(4)}  ${cents(avg((d) => d.costUsd)!).padStart(4)}` +
       `  ${fmt(avg((d) => d.toolCalls)!)}` +
+      (search > 0 ? `, ${fmt(search)} search` : "") +
       (errors > 0 ? `, ${fmt(errors)} err` : "") +
       (cut > 0 ? `, ${fmt(cut)} cut` : "");
   }
   // Each line names its trial and what went wrong; a blank line closes the group, so the
-  // details read as belonging to the row above them.
+  // details read as belonging to the row above them. Ungrounded ids are shown whether the trial
+  // passed or not: a passing answer with an id it never read is a guess that was lucky.
   const details = q.results.flatMap((r, t) => {
-    if (r.status === "pass") return [];
+    const ungrounded = r.checks?.ungrounded.length ? `ungrounded ${r.checks.ungrounded.join(", ")}` : "";
+    if (r.status === "pass") return ungrounded ? [`  trial ${t + 1} passed; ${ungrounded}`] : [];
     if (!r.score || !r.diagnostics) return [`  trial ${t + 1} threw: ${r.error}`];
     if (r.score.empty) return [`  trial ${t + 1} failed: EMPTY ANSWER (stop: ${r.diagnostics.stopReason})`];
-    const parts = [r.score.missing.length ? `missing ${r.score.missing.join(", ")}` : "", r.score.extra.length ? `extra ${r.score.extra.join(", ")}` : ""];
+    const parts = [r.score.missing.length ? `missing ${r.score.missing.join(", ")}` : "", r.score.extra.length ? `extra ${r.score.extra.join(", ")}` : "", ungrounded];
     return [`  trial ${t + 1} failed: ${parts.filter(Boolean).join("; ")}`];
   });
   return details.length > 0 ? [line, ...details, ""] : [line];
@@ -259,7 +266,9 @@ block(
   field("cost", per((t) => t.costUsd, cents) + (several ? ` (mean ${cents(s.meanCostUsd)} per trial, ${cents(s.costUsd)} in all)` : "")),
   field("recall", record.trialTotals.map((t) => pct(t.meanRecall)).join(", ")),
   field("precision", record.trialTotals.map((t) => pct(t.meanPrecision)).join(", ")),
-  field("tool calls", `${per((t) => t.toolCalls)} (Cypher errors ${per((t) => t.cypherErrors)}; cut results ${per((t) => t.cutResults)})`),
+  field("ungrounded", `${per((t) => t.ungroundedRuns)} runs asserted an id no tool output showed (${per((t) => t.ungroundedIds)} ids)`),
+  field("prose", `${record.trialTotals.map((t) => pct(t.meanProseNamed)).join(", ")} of the asserted ids named in the prose`),
+  field("tool calls", `${per((t) => t.toolCalls)} (search ${per((t) => t.searchCalls)}; Cypher errors ${per((t) => t.cypherErrors)}; cut results ${per((t) => t.cutResults)})`),
   field("empty", `${per((t) => t.empty)} answers without a final_answer call`),
   field("wall clock", seconds(record.durationMs)),
 );

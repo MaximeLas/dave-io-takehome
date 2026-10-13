@@ -102,7 +102,8 @@ function drawRun(model: AgentModel, ids: string[], trials: number, random: () =>
           status: pass ? "pass" : "fail",
           runId: null,
           score: { pass, empty: false, expected: 1, asserted: 1, missing: [], extra: [], recall: 1, precision: 1 },
-          diagnostics: { toolCalls: 0, cypherErrors: 0, cutResults: 0, durationMs: 0, costUsd: trialCost / ids.length, stopReason: "tool_use" },
+          checks: { ungrounded: [], proseNamed: 1 },
+          diagnostics: { toolCalls: 0, searchCalls: 0, cypherErrors: 0, cutResults: 0, durationMs: 0, costUsd: trialCost / ids.length, stopReason: "tool_use" },
           error: null,
         };
       }),

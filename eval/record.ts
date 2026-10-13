@@ -12,7 +12,7 @@ import path from "node:path";
 
 import type { RunRecord } from "../src/agent/record.js";
 import type { Question } from "./questions.js";
-import { diagnostics, scoreAnswer, type Diagnostics, type Score } from "./score.js";
+import { checkAnswer, diagnostics, scoreAnswer, type AnswerChecks, type Diagnostics, type ResourceNames, type Score } from "./score.js";
 
 /** A cost in US dollars printed in cents, the one unit every command prints; two digits where a gate compares two costs. */
 export const cents = (usd: number, digits = 1): string => `${(usd * 100).toFixed(digits)}c`;
@@ -25,6 +25,8 @@ export interface QuestionResult {
   /** The agent record under runs/, null when the run threw. */
   runId: string | null;
   score: Score | null;
+  /** The answer against the run's tool outputs and against its own prose; null when the run threw. */
+  checks: AnswerChecks | null;
   diagnostics: Diagnostics | null;
   error: string | null;
   /** The pass against the amended key; absent when the overlay leaves the question alone or the run threw. */
@@ -41,14 +43,15 @@ export interface QuestionTrials {
   results: QuestionResult[];
 }
 
-/** Scores one agent run: its status against the key, and its pass against the amended ids when the overlay amends the question. */
-export function scoreRun(record: RunRecord, question: Question, expectedIds: string[], amendedIds?: string[]): QuestionResult {
+/** Scores one agent run: its status against the key, the two answer checks, and its pass against the amended ids when the overlay amends the question. */
+export function scoreRun(record: RunRecord, question: Question, expectedIds: string[], names: ResourceNames, amendedIds?: string[]): QuestionResult {
   const score = scoreAnswer(record, expectedIds, question.text);
   return {
     id: question.id,
     status: score.pass ? "pass" : "fail",
     runId: record.runId,
     score,
+    checks: checkAnswer(record, names, question.text),
     diagnostics: diagnostics(record),
     error: null,
     ...(amendedIds ? { amendedPass: scoreAnswer(record, amendedIds, question.text).pass } : {}),
@@ -69,12 +72,20 @@ export interface EvalTotals {
   /** Answers with no usable final_answer call; a prompt-compliance count, kept out of the means. */
   empty: number;
   toolCalls: number;
+  /** Calls to `search_descriptions`, part of `toolCalls`. */
+  searchCalls: number;
   cypherErrors: number;
   cutResults: number;
   costUsd: number;
   /** Null when no answer was non-empty: a mean of nothing is not a measurement. */
   meanRecall: number | null;
   meanPrecision: number | null;
+  /** Runs that asserted at least one id found in none of their tool outputs, whether they passed or not. */
+  ungroundedRuns: number;
+  /** Asserted ids found in no tool output of their run, over all runs. */
+  ungroundedIds: number;
+  /** The share of asserted ids the prose names, as a mean over the non-empty answers. */
+  meanProseNamed: number | null;
 }
 
 /** What the trials add up to: the pass count and the cost the gate reads, with their spread. */
@@ -159,7 +170,7 @@ export const EVAL_RUNS_DIR = path.join("runs", "eval");
 
 /** Sums the question results of one trial. */
 export function totals(questions: QuestionResult[]): EvalTotals {
-  const answered = questions.filter((q) => q.score && q.diagnostics);
+  const answered = questions.filter((q) => q.score && q.checks && q.diagnostics);
   const nonEmpty = answered.filter((q) => !q.score!.empty);
   const mean = (values: number[]) => (values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length);
   const sum = (pick: (q: QuestionResult) => number) => answered.reduce((acc, q) => acc + pick(q), 0);
@@ -171,11 +182,15 @@ export function totals(questions: QuestionResult[]): EvalTotals {
     errors: questions.filter((q) => q.status === "error").length,
     empty: answered.length - nonEmpty.length,
     toolCalls: sum((q) => q.diagnostics!.toolCalls),
+    searchCalls: sum((q) => q.diagnostics!.searchCalls),
     cypherErrors: sum((q) => q.diagnostics!.cypherErrors),
     cutResults: sum((q) => q.diagnostics!.cutResults),
     costUsd: sum((q) => q.diagnostics!.costUsd),
     meanRecall: mean(nonEmpty.map((q) => q.score!.recall)),
     meanPrecision: mean(nonEmpty.map((q) => q.score!.precision)),
+    ungroundedRuns: answered.filter((q) => q.checks!.ungrounded.length > 0).length,
+    ungroundedIds: sum((q) => q.checks!.ungrounded.length),
+    meanProseNamed: mean(nonEmpty.map((q) => q.checks!.proseNamed)),
   };
 }
 
