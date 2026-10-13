@@ -24,6 +24,16 @@
 // re-run. The mean and the cost come from the three full trials only, which every later run
 // repeats. A green run never becomes the baseline by itself: with any tolerance, a baseline that
 // followed every green run could ratchet down one question at a time.
+//
+// Beside what the rules read, the baseline keeps each trial's totals: every reported metric, from
+// recall and precision to the answer checks (ids asserted without appearing in any tool output, the
+// prose naming its ids) and the search calls. A later run prints each beside the baseline's
+// (`metricDeltas`), and none gates: a metric gates once it is steady across accepts and has an agreed
+// budget. A new metric stored in the totals is a compile error in `metricDeltas` until it is compared.
+// It does not move the format: a baseline taken before the metric existed prints "not in the baseline"
+// for it, and stores it from the next accept made for one of its own reasons (AGENTS.md § Scoring).
+// Retaking the baseline to store a metric would re-draw the solid set and both allowances from fresh
+// samples of an agent that did not change, which is the neutral retake those reasons rule out.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -272,7 +282,11 @@ const METRICS: Record<ComparedMetric, { label: string; show: (x: number) => stri
   meanPrecision: { label: "mean precision", show: pct, diff: (d) => `${signed(Math.round(d * 100), String)} pts` },
   passedAmended: { label: "passed, amended key", show: num, diff: (d) => signed(d, num), note: "not gated" },
   empty: { label: "empty answers", show: num, diff: (d) => signed(d, num) },
+  ungroundedRuns: { label: "ungrounded runs", show: num, diff: (d) => signed(d, num) },
+  ungroundedIds: { label: "ungrounded ids", show: num, diff: (d) => signed(d, num) },
+  meanProseNamed: { label: "prose names its ids", show: pct, diff: (d) => `${signed(Math.round(d * 100), String)} pts` },
   toolCalls: { label: "tool calls", show: num, diff: (d) => signed(d, num) },
+  searchCalls: { label: "search calls", show: num, diff: (d) => signed(d, num) },
   cypherErrors: { label: "Cypher errors", show: num, diff: (d) => signed(d, num) },
   cutResults: { label: "cut results", show: num, diff: (d) => signed(d, num) },
   costUsd: { label: "cost", show: (x) => cents(x, 2), diff: (d) => signed(d, (x) => cents(x, 2)), note: "judged by rule 3" },

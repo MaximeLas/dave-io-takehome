@@ -1,6 +1,6 @@
 # Experiments
 
-One file per change that affects what the agent answers (prompt, tools, model, settings), named by date and subject, committed with the change itself. Each says which failure pattern the change targets, the hypothesis, the change, the measurement, what moved and what regressed, and the verdict. A variant measured and rejected on the way is reported in the entry it belongs to.
+One file per change that affects what the agent answers (prompt, tools, model, settings), named by date and subject, committed with the change itself; a measurement of the agent that changes nothing it answers (the key audit, a new check) has a file too, marked as such. Each says which failure pattern the change targets, the hypothesis, the change, the measurement, what moved and what regressed, and the verdict. A variant measured and rejected on the way is reported in the entry it belongs to.
 
 **How a change is measured.** Haiku 5.5 at effort high, three full runs of the thirty questions per variant (`npm run eval`, which runs three trials in one record, the measurement the gate makes), compared with the three runs before it. With nothing changed, a run moves by about ±2 passes, so a smaller gain is not a gain. The totals say whether a change helped; the per-question comparison says which questions moved and why.
 
@@ -13,3 +13,4 @@ One file per change that affects what the agent answers (prompt, tools, model, s
 | 2026-10-12 | [Search by meaning over the descriptions](2026-10-12-meaning-search.md) | 25, 26, 26 → 25, 25, 26 |
 | 2026-10-13 | [The answer key, audited](2026-10-13-key-audit.md) (not a change to the agent) | against the key 26, 26, 27; against the amended key 27, 27, 28 (one run) |
 | 2026-10-13 | [The solid set, earned over six draws](2026-10-13-solid-six.md) (not a change to the agent) | the accept 24, 26, 26; simulated rule 2 false reds 14.8% → 4.5% |
+| 2026-10-13 | [The answer against the evidence and against itself](2026-10-13-metrics-checks.md) (not a change to the agent) | the accept's runs re-scored: no ungrounded id; prose names 100%, 96%, 100% of its ids; 11, 11, 9 search calls |

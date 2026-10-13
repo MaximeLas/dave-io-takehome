@@ -37,7 +37,8 @@ const result = (id: string, status: QuestionResult["status"], costUsd = 0.01, em
     status === "error"
       ? null
       : { pass: status === "pass", empty, expected: 1, asserted: empty ? 0 : 1, missing: [], extra: [], recall: empty ? 0 : 1, precision: 1 },
-  diagnostics: status === "error" ? null : { toolCalls: 1, cypherErrors: 0, cutResults: 0, durationMs: 1000, costUsd, stopReason: "tool_use" },
+  checks: status === "error" ? null : { ungrounded: [], proseNamed: 1 },
+  diagnostics: status === "error" ? null : { toolCalls: 1, searchCalls: 0, cypherErrors: 0, cutResults: 0, durationMs: 1000, costUsd, stopReason: "tool_use" },
   error: status === "error" ? "boom" : null,
 });
 
@@ -265,7 +266,7 @@ test("the gate's verdict is the same with and without the key overlay file", asy
   const runWith = (overlay: KeyOverlay): EvalRun => {
     const amended = applyOverlay(key, overlay);
     const trials = [0, 1, 2].map((t) =>
-      questions.map((q) => scoreRun(record(t < 2 ? amendedKey[q.id]! : key[q.id]!, q.id), q, key[q.id]!, q.id in overlay ? amended[q.id] : undefined)),
+      questions.map((q) => scoreRun(record(t < 2 ? amendedKey[q.id]! : key[q.id]!, q.id), q, key[q.id]!, new Map(), q.id in overlay ? amended[q.id] : undefined)),
     );
     return { evalId: "e", model: "m", effort: "high", promptVersion: "p", codeVersion: "c", startedAt: "", finishedAt: "", durationMs: 0, full: true, ...assemble(trials) };
   };
@@ -296,7 +297,8 @@ test("the report compares every metric a trial's totals store with the baseline'
   const lines = metricDeltas(now, accepted.trialTotals);
   assert.equal(lines.length, 1 + COMPARED_METRICS.length);
   assert.match(lines[0]!, /^every stored metric/);
-  for (const label of ["mean recall", "mean precision", "passed, amended key", "empty answers", "tool calls", "Cypher errors", "cut results", "cost"]) {
+  const labels = ["mean recall", "mean precision", "passed, amended key", "empty answers", "ungrounded runs", "ungrounded ids", "prose names its ids", "tool calls", "search calls", "Cypher errors", "cut results", "cost"];
+  for (const label of labels) {
     assert.ok(lines.some((l) => l.startsWith(`  ${label} `)), `a line for ${label}`);
   }
   // Two questions at 1.2c against ten at 1c: 2.4c a trial against 10c.
@@ -306,6 +308,13 @@ test("the report compares every metric a trial's totals store with the baseline'
   const older = accepted.trialTotals.map(({ passedAmended: _p, ...rest }) => rest as EvalTotals);
   assert.match(lines.find((l) => l.startsWith("  passed, amended key"))!, /1\.7 \(baseline 7\.7, -6\); not gated$/);
   assert.match(metricDeltas(now, older).find((l) => l.startsWith("  passed, amended key"))!, /\(not in the baseline\); not gated$/);
+  // The committed baseline predates the answer checks and the search calls: each reads as such, and the rest still compare.
+  const beforeChecks = accepted.trialTotals.map(({ ungroundedRuns: _u, ungroundedIds: _i, meanProseNamed: _p, searchCalls: _s, ...rest }) => rest as EvalTotals);
+  const againstOld = metricDeltas(now, beforeChecks);
+  for (const label of ["ungrounded runs", "ungrounded ids", "prose names its ids", "search calls"]) {
+    assert.match(againstOld.find((l) => l.startsWith(`  ${label} `))!, /\(not in the baseline\)$/, label);
+  }
+  assert.match(againstOld.find((l) => l.startsWith("  tool calls "))!, /\(baseline 10, -8\)$/);
 });
 
 test("totals: errors stay out of the sums, empty answers stay out of the means", () => {
@@ -316,4 +325,22 @@ test("totals: errors stay out of the sums, empty answers stay out of the means",
   assert.equal(t.meanRecall, 1);
   assert.equal(t.meanPrecision, 1);
   assert.equal(totals([result("c", "error")]).meanRecall, null);
+});
+
+test("totals: the answer checks and the search calls add up per trial, passed or not, empty answers out of the prose mean", () => {
+  const checked = (r: QuestionResult, ungrounded: string[], proseNamed: number, searchCalls: number): QuestionResult => ({
+    ...r,
+    checks: { ungrounded, proseNamed },
+    diagnostics: { ...r.diagnostics!, searchCalls },
+  });
+  const t = totals([
+    checked(result("a", "pass"), ["aws:sqs:queue-x-1"], 1, 2),
+    checked(result("b", "fail"), ["aws:sqs:queue-x-2", "aws:sqs:queue-x-3"], 0.5, 0),
+    checked(result("c", "pass"), [], 0.75, 1),
+    checked(result("d", "fail", 0.01, true), [], 1, 0),
+    result("e", "error"),
+  ]);
+  assert.deepEqual([t.ungroundedRuns, t.ungroundedIds, t.searchCalls], [2, 3, 3]);
+  assert.equal(t.meanProseNamed, 0.75, "the mean of 1, 0.5 and 0.75; the empty answer is left out");
+  assert.equal(totals([result("e", "error")]).meanProseNamed, null);
 });

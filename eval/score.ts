@@ -97,9 +97,119 @@ function namedInQuestion(id: string, questionText: string): boolean {
   return new RegExp(`(?<![A-Za-z0-9_/-])${escaped}(?![A-Za-z0-9_/-])`).test(questionText);
 }
 
+// The answer against the evidence, and against itself. Everything above compares the answer with
+// the key; these two checks compare it with what the run read and with its own prose. Both are
+// code, because the claims are ids and the evidence is text the record stores verbatim: groundedness
+// (the RAG triad, RAGAS's faithfulness) usually needs a model to split an answer into claims and
+// judge each against the context, and here neither step needs one. Reported, not gated.
+
+/** Each resource's name, by its id, as the graph holds it; the prose check knows a resource by either. */
+export type ResourceNames = ReadonlyMap<string, string>;
+
+/** What the two answer-level checks say about one run. */
+export interface AnswerChecks {
+  /** Asserted ids that appear in no tool output of the run: built from a pattern or a name, never read. Independent of the pass. */
+  ungrounded: string[];
+  /** The share of asserted ids the prose names, by full id, by name, or in a family's short form; 1 when nothing was asserted. */
+  proseNamed: number;
+}
+
+// The tools whose successful output is evidence: the two that read the graph.
+const EVIDENCE_TOOLS = new Set(["run_cypher", "search_descriptions"]);
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+// Whole tokens: `queue-commerce-prod-1` must not match inside `queue-commerce-prod-13`, a bucket's name
+// inside its policy's (`bucket-commerce-prod-1-policy`), or a repository's inside a workflow's
+// (`repo-commerce-prod-1/deploy-prod.yml`). An id may follow a colon, since a query can print
+// `label:id`; a name may not, so a bucket is not named by its policy's id (`aws:s3-policy:bucket-…`).
+// A trailing `.` or `:` is allowed, for punctuation.
+const idToken = (id: string) => new RegExp(`(?<![A-Za-z0-9_/.-])${escape(id)}(?![A-Za-z0-9_/-])`);
+const nameToken = (name: string) => new RegExp(`(?<![A-Za-z0-9_:/.-])${escape(name)}(?![A-Za-z0-9_/-])`);
+
+/**
+ * Whether the prose names a resource: its full id, its name from the graph, or a short form of either.
+ * The prose often names one member of a family in full and abbreviates the rest
+ * ("queue-commerce-prod-5, -6 and -7", "i-ecomm-prod-02, 06, 10 and 14", "prod-13 to prod-16",
+ * "datadog:monitor:commerce-3, -4"), so a resource whose id or name ends in a number also counts as
+ * named when a sibling (the same id or name up to the number) is named in full somewhere in the prose,
+ * and its number appears in a run of short forms that starts at the family: a member in full, by id or
+ * by name, or the family's last word (`prod-13`), followed by numbers joined by commas, "and", or a
+ * range ("to", "through", a dash), each bare, `-6`, `prod-6` or in full. A run is tied to its family,
+ * so "prod queues 1 to 16" credits nothing, and "queue-commerce-prod-13 and rds-commerce-prod-14" does
+ * not name queue 14. Errors remain both ways. Two families sharing a last word (`queue-commerce-prod-`,
+ * `i-ecomm-prod-`) can credit each other through a run that starts at the word alone. A prose that
+ * names no member in full ("dev queues 1 to 4"), or calls a resource by a partial id
+ * ("s3-policy:bucket-commerce-prod-1") or a short form of its own ("repo-commerce-prod-1" for
+ * `acme-commerce/repo-commerce-prod-1`), leaves a resource it names flagged.
+ */
+function namedInProse(id: string, name: string | undefined, prose: string): boolean {
+  if (idToken(id).test(prose) || (name !== undefined && nameToken(name).test(prose))) return true;
+  return namedAsSibling(id, name, prose);
+}
+
+// The short forms of `namedInProse`, for a resource whose id, or name, ends in a number.
+function namedAsSibling(id: string, name: string | undefined, prose: string): boolean {
+  const families = [id, name].flatMap((full) => {
+    const family = full?.match(/^(.*[^0-9])(\d+)$/);
+    return family ? [{ full: full!, stem: family[1]!, n: Number(family[2]) }] : [];
+  });
+  const n = families[0]?.n;
+  if (n === undefined) return false;
+  const own = families.filter((f) => f.n === n);
+  // A member in full, with the boundaries of a full id or name: an id may follow a colon, a name may not.
+  const inFull = own.map((f) => `${f.full.includes(":") ? "(?<![A-Za-z0-9_/.-])" : "(?<![A-Za-z0-9_:/.-])"}${escape(f.stem)}`).join("|");
+  // The sibling named in full ("aws:sqs:queue-commerce-prod-5, prod-6 and prod-7").
+  if (!new RegExp(`(?:${inFull})\\d+(?!\\d)`).test(prose)) return false;
+  const words = [...new Set(own.map((f) => f.stem.replace(/-$/, "").split(/[-/:]/).at(-1) ?? ""))].filter((w) => w !== "");
+  // Where a run starts: a member in full, or the family's word (`prod-13 to prod-16`). A later member
+  // is written the same way, as `-6`, or as a bare number.
+  const start = `(?:${[inFull, ...words.map((w) => `(?<![A-Za-z0-9_:/.-])${escape(w)}-`)].join("|")})`;
+  const member = `(?:${start}|-)?`;
+  // Members may carry a parenthesis between them ("i-ecomm-dev-01 and -05 (web entry), -02 and -06"),
+  // and Markdown's code or bold marks around them ("`i-ecomm-dev-01`, `-03`").
+  const join = "[`*]*(?:\\s*\\([^()]*\\))?\\s*(?:,\\s*and|,|and|to|through|–|—)\\s*[`*]*";
+  for (const run of prose.matchAll(new RegExp(`${start}(\\d+)(?![A-Za-z0-9_-])((?:${join}${member}\\d+(?![\\d-]))*)`, "g"))) {
+    let previous = Number(run[1]);
+    if (previous === n) return true;
+    for (const step of run[2]!.matchAll(new RegExp(`(${join})${member}(\\d+)`, "g"))) {
+      const next = Number(step[2]);
+      const range = /\b(?:to|through)\b|–|—/.test(step[1]!.replace(/\([^()]*\)/, ""));
+      if (next === n || (range && previous <= n && n <= next)) return true;
+      previous = next;
+    }
+  }
+  return false;
+}
+
+/**
+ * Checks one run's answer against the outputs of its tool calls and against its own prose. The
+ * asserted ids are the grader's: the ids the question names count neither way.
+ *
+ * Grounded: an asserted id must appear, as a whole token, in the output of at least one successful call
+ * of the two tools that read the graph (`run_cypher` prints every value a query returns, ids included
+ * when it returns them; `search_descriptions` lists the ids carrying each description). Matching the id
+ * string suffices because both tools print ids verbatim (`src/agent/tools.ts`). An id the run only built
+ * from a name or a naming pattern is flagged even when it is right, which is the point: a right id that
+ * was never read is a lucky guess. A row beyond the 100-row cap was never printed, so an id seen only
+ * there is flagged. A query's own text is not evidence: `WHERE n.id IN [...]` returns rows for some ids
+ * of the list. Nor is an error's output, which can quote the failing query, ids and all, nor the output
+ * of any other tool, which can echo what the model wrote.
+ *
+ * Prose: the share of asserted ids the prose names (`namedInProse`). It sees that an id is named, not
+ * that the prose asserts it: a prose that names what it ruled out names ids it did not assert.
+ */
+export function checkAnswer(record: Pick<RunRecord, "answer" | "ids" | "toolCalls">, names: ResourceNames, questionText: string): AnswerChecks {
+  const asserted = [...new Set(record.ids)].filter((id) => !namedInQuestion(id, questionText));
+  const outputs = record.toolCalls.filter((call) => !call.isError && EVIDENCE_TOOLS.has(call.name)).map((call) => call.output);
+  const ungrounded = asserted.filter((id) => !outputs.some((output) => idToken(id).test(output)));
+  const named = asserted.filter((id) => namedInProse(id, names.get(id), record.answer));
+  return { ungrounded, proseNamed: asserted.length === 0 ? 1 : named.length / asserted.length };
+}
+
 /** What a run cost and how it went, read off the record. Reported, not gated. */
 export interface Diagnostics {
   toolCalls: number;
+  /** Calls to `search_descriptions`: whether the agent searches when a question names a purpose, and leaves the search alone when the graph's structure answers. */
+  searchCalls: number;
   /** Queries the database refused (`Cypher error:`); the model repairing its own query. */
   cypherErrors: number;
   /** Results the tool cut at its row cap; the model asking for too much. */
@@ -116,6 +226,7 @@ const CUT_RESULT = /^\d+ of \d+ rows shown/;
 export function diagnostics(record: RunRecord): Diagnostics {
   return {
     toolCalls: record.toolCalls.length,
+    searchCalls: record.toolCalls.filter((call) => call.name === "search_descriptions").length,
     cypherErrors: record.toolCalls.filter((call) => call.isError).length,
     cutResults: record.toolCalls.filter((call) => CUT_RESULT.test(call.output)).length,
     durationMs: record.durationMs,

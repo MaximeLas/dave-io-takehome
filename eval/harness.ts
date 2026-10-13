@@ -23,10 +23,11 @@ import { PROMPT_VERSION } from "../src/agent/prompt.js";
 import { saveRun } from "../src/agent/record.js";
 import { codeVersion, runAgent } from "../src/agent/run.js";
 import { assertGraphReady } from "../src/graph/health.js";
+import { loadResourceNames } from "../src/graph/names.js";
 import { SECOND_ROUND_RUNS, secondRoundEntrants } from "./baseline.js";
 import { loadQuestions, type Question } from "./questions.js";
 import { assemble, scoreRun, type EvalRun, type QuestionResult, type SecondRound } from "./record.js";
-import { applyOverlay, loadAnswerKey, loadKeyOverlay } from "./score.js";
+import { applyOverlay, loadAnswerKey, loadKeyOverlay, type ResourceNames } from "./score.js";
 
 /** What one eval run varies; anything left out takes the shipped default. */
 export interface EvalOptions {
@@ -50,12 +51,13 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   const effort = options.effort ?? DEFAULT_EFFORT;
   const trials = options.trials ?? 1;
   if (!Number.isInteger(trials) || trials < 1) throw new Error(`The number of trials must be a whole number of at least 1, not ${trials}.`);
-  const scorer = await loadScorer();
+  const withNames = await loadScorer();
   const all = await loadQuestions();
   const questions = options.only ? all.filter((q) => options.only!.includes(q.id)) : all;
   const unknown = (options.only ?? []).filter((id) => !all.some((q) => q.id === id));
   if (unknown.length > 0) throw new Error(`Unknown question id(s): ${unknown.join(", ")}`);
   await assertGraphReady();
+  const scorer = withNames(await loadResourceNames());
 
   const startedAt = new Date();
   const results: QuestionResult[][] = Array.from({ length: trials }, () => []);
@@ -84,13 +86,17 @@ export async function runEval(options: EvalOptions = {}): Promise<EvalRun> {
   };
 }
 
-/** Runs one question through the agent and scores it; the key and overlay are loaded once, and checked against each other before any token is spent. */
-async function loadScorer(): Promise<(question: Question, model: ModelId, effort: Effort) => Promise<QuestionResult>> {
+/**
+ * Runs one question through the agent and scores it. The key and overlay are loaded once, and checked
+ * against each other before any token is spent; the resources' names, which the prose check reads, come
+ * from the graph once it is known to be ready.
+ */
+async function loadScorer(): Promise<(names: ResourceNames) => (question: Question, model: ModelId, effort: Effort) => Promise<QuestionResult>> {
   const key = await loadAnswerKey();
   const overlay = await loadKeyOverlay();
   // Only the questions the overlay names get an amended score.
   const amended = applyOverlay(key, overlay);
-  return (q, model, effort) => runOne(q, key[q.id] ?? [], q.id in overlay ? amended[q.id] : undefined, model, effort);
+  return (names) => (q, model, effort) => runOne(q, key[q.id] ?? [], names, q.id in overlay ? amended[q.id] : undefined, model, effort);
 }
 
 /**
@@ -135,22 +141,30 @@ export async function playSecondRound(
 
 /** Runs the second accept round through the agent, on the model and effort of the run it follows. */
 export async function runSecondRound(run: EvalRun, options: { onRun?: (result: QuestionResult, attempt: number) => void } = {}): Promise<SecondRound> {
-  const scorer = await loadScorer();
+  const withNames = await loadScorer();
   const questions = new Map((await loadQuestions()).map((q) => [q.id, q]));
   await assertGraphReady();
+  const scorer = withNames(await loadResourceNames());
   return playSecondRound(run, (id) => scorer(questions.get(id)!, run.model as ModelId, run.effort as Effort), options);
 }
 
-async function runOne(question: Question, expectedIds: string[], amendedIds: string[] | undefined, model: ModelId, effort: Effort): Promise<QuestionResult> {
+async function runOne(
+  question: Question,
+  expectedIds: string[],
+  names: ResourceNames,
+  amendedIds: string[] | undefined,
+  model: ModelId,
+  effort: Effort,
+): Promise<QuestionResult> {
   try {
     const record = await runAgent(
       { question: question.text, questionId: question.id },
       { model, effort, signal: AbortSignal.timeout(QUESTION_TIMEOUT_MS) },
     );
     await saveRun(record);
-    return scoreRun(record, question, expectedIds, amendedIds);
+    return scoreRun(record, question, expectedIds, names, amendedIds);
   } catch (error) {
-    return { id: question.id, status: "error", runId: null, score: null, diagnostics: null, error: describe(error) };
+    return { id: question.id, status: "error", runId: null, score: null, checks: null, diagnostics: null, error: describe(error) };
   }
 }
 
