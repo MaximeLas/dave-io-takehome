@@ -1,6 +1,6 @@
 # Decisions
 
-The design decisions behind this work, one entry per choice a reviewer is likely to question, each headed by that question; the condensed list of the nine main ones is in [`SOLUTION.md` § Decisions](../SOLUTION.md#decisions).
+The design decisions behind this work, one entry per choice a reviewer is likely to question, each headed by that question; the condensed list of the nine main ones is in [`SOLUTION.md` § How this was built, and the decisions](../SOLUTION.md#how-this-was-built-and-the-decisions).
 
 An entry gives the choice, the options rejected with the reason each lost, the evidence with its frame (which runs, on which model and prompt, which committed file), and the observation that would reopen it. Where a first choice was later revised, the entry says what was chosen first, what was learned, and what replaced it.
 
@@ -60,7 +60,7 @@ Numbers come from committed files only: the experiment files in [`eval/experimen
 
 **Choice.** The prompt carries conventions (`src/agent/conventions.ts`) saying what a question's words mean on this estate. The first set was written by a Claude agent given only the live graph, never the questions, the key or any run, and asked for the guide it would hand a new engineer. Where its readings differed from the key's, both were measured and the key's adopted. No line names a question.
 
-**Why this is not tuning to the test.** The key's sets follow rules ([F21](facts.md#f21-the-answer-key-is-generated-by-a-script-outside-this-repository)) and are the only record of this estate's vocabulary. Adopting "reach means permission" changes every question with that word. No line was written for a single question, though the storefront miss could be won by one ([Known misses](../SOLUTION.md#known-misses)).
+**Why this is not tuning to the test.** The key's sets follow rules ([F21](facts.md#f21-the-answer-key-is-generated-by-a-script-outside-this-repository)) and are the only record of this estate's vocabulary. Adopting "reach means permission" changes every question with that word. No line was written for a single question, though the storefront miss could be won by one ([Known misses](../SOLUTION.md#what-it-gets-wrong)).
 
 **Rejected.**
 
@@ -69,7 +69,7 @@ Numbers come from committed files only: the experiment files in [`eval/experimen
 
 **Revised.** Three blind lines taught the agent to model a business area as a lane of compute and to assume production when no environment was named. Rewritten as general lines from that failure pattern, not for any one question, checkout went from 0 of 11 runs to 9 of 9, fulfillment from 2 of 11 to 6 of 6 ([business area](../eval/experiments/2026-10-12-business-area.md)). One more reading came from the key, which kinds make up an area; without it, 23, 24, 23.
 
-**The cost.** Rewritten from the traces, the lines were chosen on the eval itself. Four variants of the wording were measured; the one that shipped beat its closest alternative, identical except that it also named target groups among an area's configuration, on totals inside the run-to-run noise (27, 27, 24 against 25, 26, 26), so its gain is not held-out evidence. With three readings taken from the key, the score is also partly fitted to it ([Known misses](../SOLUTION.md#known-misses)).
+**The cost.** Rewritten from the traces, the lines were chosen on the eval itself. Four variants of the wording were measured; the one that shipped beat its closest alternative, identical except that it also named target groups among an area's configuration, on totals inside the run-to-run noise (27, 27, 24 against 25, 26, 26), so its gain is not held-out evidence. With three readings taken from the key, the score is also partly fitted to it ([Known misses](../SOLUTION.md#what-it-gets-wrong)).
 
 **What would change it.** A held-out reworded set scoring well below the thirty.
 
@@ -84,7 +84,7 @@ Numbers come from committed files only: the experiment files in [`eval/experimen
 - Counting queues as data: it passes the order-flow question and fails the unmonitored-data one, and a cloud engineer reads a queue as transport, not storage.
 - A line scoped to the order-flow question: a patch for one question, the bias the conventions avoid.
 
-**Evidence.** In the conventions experiment (three runs per side), the unmonitored-data question was one of four that went from 0 or 1 of 3 runs to 3 of 3, and the order-flow question went from 2 of 3 to 0 of 3. It has failed every run since and is one of the three [known misses](../SOLUTION.md#known-misses).
+**Evidence.** In the conventions experiment (three runs per side), the unmonitored-data question was one of four that went from 0 or 1 of 3 runs to 3 of 3, and the order-flow question went from 2 of 3 to 0 of 3. It has failed every run since and is one of the three [known misses](../SOLUTION.md#what-it-gets-wrong).
 
 The key audit ([below](#why-trust-the-answer-key-and-what-happens-where-it-reads-a-question-differently)) amends the order-flow set in its overlay on this reasoning, so the question passes against the amended key and stays a miss against the key itself, which the gate reads.
 
@@ -186,7 +186,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 
 ### Why these metrics, and why are only two gated?
 
-**Choice.** Besides the pass, every run reports recall, precision, empty answers, the passes against the amended key, the asserted ids that no tool output of the run printed, the share of asserted ids the prose names, cost, tool calls and search calls, Cypher errors, cut results, duration and the stop reason of an empty answer, all computed by code from the run record (`eval/score.ts`, `eval/record.ts`). Retrieval is measured offline on its own dev set (`scripts/measure-search.ts`). Two quantities gate: the pass count (rules 1 and 2) and the cost (rule 3). The argument, metric by metric, is [`SOLUTION.md` § What is measured, and why](../SOLUTION.md#what-is-measured-and-why).
+**Choice.** Besides the pass, every run reports recall, precision, empty answers, the passes against the amended key, the asserted ids that no tool output of the run printed, the share of asserted ids the prose names, cost, tool calls and search calls, Cypher errors, cut results, duration and the stop reason of an empty answer, all computed by code from the run record (`eval/score.ts`, `eval/record.ts`). Retrieval is measured offline on its own dev set (`scripts/measure-search.ts`). Two quantities gate: the pass count (rules 1 and 2) and the cost (rule 3). The argument, metric by metric, is [What is measured, and why](metrics.md).
 
 **Why.** Each metric answers a failure read in a trace (padding, broken answer contracts, wandering queries) or a question the thirty cannot answer (whether the search finds descriptions worded differently). Code grades wherever it can, as Anthropic's evals guidance and Husain and Shankar's recommend, because the claims are ids and the evidence is stored text. A metric gates once it is steady across runs and has an agreed budget (`AGENTS.md` § Scoring); the pass count and the cost meet that, and are what a regression costs: a wrong answer, or a dearer one.
 
@@ -233,7 +233,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 - Per-question exceptions in the grader: they hide where the agent and the key disagree.
 - The key as unaudited ground truth: "Which resources are reachable from the largest number of distinct compute instances?" has two correct answers on correct data, 24 queues by permission or three security groups by any path ([F22](facts.md#f22-the-key-reads-reach-and-connect-as-permission-and-storage-and-data-as-buckets-and-databases-with-one-exception)).
 
-**Evidence.** Of the three questions that fail on every run, the audit finds one the key's error, one a fair ambiguity and one the agent's ([Known misses](../SOLUTION.md#known-misses)).
+**Evidence.** Of the three questions that fail on every run, the audit finds one the key's error, one a fair ambiguity and one the agent's ([Known misses](../SOLUTION.md#what-it-gets-wrong)).
 
 **What would change it.** A second reader reaching different verdicts on the same queries; or dave.io supplying the generator, turning inferred readings into stated ones.
 
@@ -246,12 +246,12 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 **Rejected.**
 
 - Applying the change and keeping it when the eval's score rises, as automatic prompt optimisers do (DSPy's optimisers, GEPA): with no held-out set, a rise on the thirty is not evidence the change generalises, and a change worth one or two questions sits inside the run-to-run noise of about two passes, so a loop keeping every rise would keep noise too.
-- The judge as a gate on every run: an unvalidated judge in CI fails builds on its own errors ([where a judge would enter](../SOLUTION.md#where-a-model-judge-would-enter-and-why-none-gates)).
+- The judge as a gate on every run: an unvalidated judge in CI fails builds on its own errors ([where a judge would enter](metrics.md#where-a-model-judge-would-enter-and-why-none-gates)).
 - One call that judges every trace and proposes: a trace runs to tens of tool outputs, and the judgement here, not measured, is that six in one context would dilute each other, while judging each alone and comparing the short judgements is where a pattern across questions shows.
 - Judging every failing trial by default: on the first full run's record that is 14 traces instead of 6, about $1.73 instead of 89 cents, estimated from that run's cost per trace (10.5 cents on average) and its proposal (26 cents), while the trials the judge does not read still reach the proposer as the ids each missed and added; `--traces 3` judges them all when a question's failures differ.
 - A hosted trace analysis (LangSmith's Insights) instead: it groups traces into categories, but does not read a trace against a per-question reference derivation with the agent's own prompt and past experiments, which is what a proposal for this agent needs ([a hand-built harness](#why-a-hand-built-harness-rather-than-langsmith-or-braintrust)).
 
-**Example, not evidence.** The first full run, on 13 Oct, on an earlier version of the improver's prompt, read the eval record of the current baseline's accept (Haiku 5.5 at effort high, prompt `1d555744`): six questions with a failing trial, one trace each, 89 cents. It left out the two questions the audit attributes to the key or to an ambiguous reading, and proposed one sentence in the `ids` rule for a pattern it found in two questions. An earlier run on one of those questions named a step that does not exist and proposed a different change; what a reviewing Claude agent found right and wrong in both is in [`SOLUTION.md`, further, item 1](../SOLUTION.md#how-i-would-take-this-further). Neither proposal is applied or measured.
+**Example, not evidence.** The first full run, on 13 Oct, on an earlier version of the improver's prompt, read the eval record of the current baseline's accept (Haiku 5.5 at effort high, prompt `1d555744`): six questions with a failing trial, one trace each, 89 cents. It left out the two questions the audit attributes to the key or to an ambiguous reading, and proposed one sentence in the `ids` rule for a pattern it found in two questions. An earlier run on one of those questions named a step that does not exist and proposed a different change; what a reviewing Claude agent found right and wrong in both is in [the improvement loop](improvement-loop.md). Neither proposal is applied or measured.
 
 **What would change it.** A set of failing traces labelled by a person, on which the judge's true positive and true negative rates per failure mode are high enough to trust; then a held-out question set, so that a proposal kept because it scored better is kept on questions it never saw. With both, applying a proposal and measuring it could run without a person, who would still read the accepts.
 
@@ -267,7 +267,7 @@ A tenth of the cost and an intact answer contract, for about a second more per q
 - The CLI alone: it runs every step, and stays the way CI and an accept run them, but leaves the reading of a failure to a person assembling four sources by hand.
 - An accept button: the same command without the clean-tree check and the commit that dates it.
 
-**Evidence.** The endpoints are tested without a model (`src/server/eval.controller.test.ts`): a cross-site form post starts nothing (the first version defaulted an empty body to a three-trial run, which that test caught), a request addressed to another host name is refused, and a record keeps its stored verdict when today's baseline would judge it otherwise. On 13 Oct each button was first run against a key whose spend cap was reached; each reported the API's refusal in one line, and the eval button's run was saved and judged INCOMPLETE as the command judges it. With the cap raised the same day, each made its first paid run: one question (a pass, 0.35 cents), one eval trial (27 of 30, 9.2 cents, reported and not compared, as the command reports one trial), and the improver on that trial's three failing questions (57 cents), which proposed no change and named the evidence that would justify one. The figures and the proposal's reading are in the write-up ([the eval on a page](../SOLUTION.md#the-eval-as-error-analysis)). One run of each proves the path, not the page.
+**Evidence.** The endpoints are tested without a model (`src/server/eval.controller.test.ts`): a cross-site form post starts nothing (the first version defaulted an empty body to a three-trial run, which that test caught), a request addressed to another host name is refused, and a record keeps its stored verdict when today's baseline would judge it otherwise. On 13 Oct each button was first run against a key whose spend cap was reached; each reported the API's refusal in one line, and the eval button's run was saved and judged INCOMPLETE as the command judges it. With the cap raised the same day, each made its first paid run: one question (a pass, 0.35 cents), one eval trial (27 of 30, 9.2 cents, reported and not compared, as the command reports one trial), and the improver on that trial's three failing questions (57 cents), which proposed no change and named the evidence that would justify one. The figures and the proposal's reading are in [the eval on a page](improvement-loop.md#the-eval-on-a-page). One run of each proves the path, not the page.
 
 **What would change it.** People other than the developer using the page (a login, a spending limit per person, and jobs that survive a restart); or the workbench of the next steps, an input edited without saving and run against the baseline, whose runs could inform a change and never become a baseline, since no committed code produced them.
 
