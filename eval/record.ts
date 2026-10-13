@@ -148,6 +148,8 @@ export interface EvalRecord {
   model: string;
   effort: string;
   promptVersion: string;
+  /** The fingerprint of everything the model read (src/agent/version.ts); absent from records older than the field. */
+  agentVersion?: string;
   codeVersion: string;
   startedAt: string;
   finishedAt: string;

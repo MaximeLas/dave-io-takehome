@@ -1,0 +1,887 @@
+<!doctype html>
+<!--
+  The eval page: the improvement loop on one screen. The latest complete eval run (or any other)
+  as a table, a row per question, under the verdict the run stored when it was judged; one
+  question run again and scored on the spot; the whole eval run from here with its progress; the
+  failures handed to the improver and its proposal read as a document; and what determines a run,
+  the text the agent version hashes. Every number comes from the eval's own code through
+  /api/evals, /api/eval-runs, /api/question-runs, /api/improve and /api/agent
+  (src/server/eval.controller.ts). The page never moves the baseline, and each button that spends
+  shows its cost on the button and asks first.
+
+  It is a tool, so its text is labels and short lines, not explanation: each block states what
+  runs, what it saves and what it changes as a labelled list, and the argument stays in
+  SOLUTION.md. One type scale, set here rather than in common.css because the chat and run pages
+  read prose and this page reads figures: the chat page's font and header, mono only for ids,
+  hashes and paths, and nothing smaller or lighter than the table's body.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  /* The chat page's font, body size and header (common.css); this page adds only the three sizes
+     a table of figures needs: body, the table's body (the floor), and mono for ids. */
+  :root {
+    --size-body: 0.9375rem;
+    --size-small: 0.875rem;
+    --size-mono: 0.8rem;
+  }
+  .column { max-width: 84rem; }
+  .measure { max-width: 46rem; }
+  main { flex: 1; padding: 1.75rem 0 4rem; }
+  code { font: var(--size-mono) var(--mono); }
+
+  header nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; margin-top: 0.45rem; font-size: 0.875rem; }
+  main > .column > section + section { margin-top: 3rem; padding-top: 2.25rem; border-top: 1px solid var(--rule); }
+  h2 { font-size: 1.25rem; font-weight: 650; line-height: 1.3; margin: 0 0 1rem; }
+  h3 { font-size: 1rem; font-weight: 650; margin: 2rem 0 0.7rem; }
+  p { margin: 0 0 0.6rem; }
+  .line { font-size: var(--size-body); margin: 0.6rem 0 0; }
+  .warn { color: var(--warn); }
+
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; }
+  .row label { font-size: var(--size-small); }
+  select { font-size: var(--size-small); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 0.3rem 0.45rem; }
+  .act { background: var(--accent); color: var(--paper); border: none; border-radius: 6px; padding: 0.5rem 1rem; font-weight: 600; font-size: var(--size-small); }
+  .act:disabled, .quiet:disabled { opacity: 0.45; cursor: default; }
+  .quiet.small { padding: 0.15rem 0.5rem; font-size: 0.875rem; }
+  .price { font-variant-numeric: tabular-nums; }
+
+  /* Label and value, one fact a line: the page's one way of saying what something is. */
+  .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.35rem 1.75rem; margin: 0; font-size: var(--size-body); }
+  .facts dt { font-weight: 600; }
+  .facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+  @media (max-width: 40rem) {
+    .facts { grid-template-columns: 1fr; gap: 0 0; }
+    .facts dd { margin-bottom: 0.45rem; }
+  }
+
+  .gate { margin: 1.5rem 0 0; padding: 1rem 1.25rem; border: 1px solid var(--rule); border-left: 3px solid var(--muted); border-radius: 5px; }
+  .gate.ok { border-left-color: var(--accent); }
+  .gate.bad { border-left-color: var(--warn); }
+  .gate .verdict { font-size: 1.0625rem; font-weight: 600; margin: 0 0 0.5rem; }
+  .gate.ok .verdict { color: var(--accent); }
+  .gate.bad .verdict { color: var(--warn); }
+  .gate .gap { height: 0.5rem; }
+  .gate .held { color: var(--accent); }
+  .gate .failed { color: var(--warn); }
+  .gate details { margin-top: 0.8rem; font-size: var(--size-small); }
+  .gate summary { cursor: pointer; }
+  .gate pre { margin: 0.5rem 0 0; font: var(--size-mono)/1.5 var(--mono); white-space: pre-wrap; }
+
+  .table-wrap { margin-top: 1.5rem; overflow-x: auto; }
+  table.grid { border-collapse: collapse; width: 100%; font-size: var(--size-small); }
+  table.grid th { text-align: left; font-weight: 600; font-size: var(--size-small); padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--muted); white-space: nowrap; }
+  table.grid td { padding: 0.5rem 0.6rem; vertical-align: top; border-bottom: 1px solid var(--rule); }
+  table.grid td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.grid tr.failing td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+  /* The question sets the row's height: wide enough for any of the thirty in two lines at 1280. */
+  .qtext { min-width: 20rem; }
+  table.grid tr.has-detail td { border-bottom: none; padding-bottom: 0.15rem; }
+  table.grid tr.detail td { padding-top: 0; }
+  table.grid tr.failing.detail td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+  .checks div + div { margin-top: 0.15rem; }
+  .qid { font: var(--size-mono) var(--mono); color: var(--muted); margin-left: 0.4rem; white-space: nowrap; }
+  .solid { font-size: 0.875rem; color: var(--accent); margin-left: 0.35rem; }
+  .amended { border-bottom: 1px dotted var(--muted); cursor: help; margin-left: 0.35rem; }
+  .detail-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; }
+  .detail-line button { flex: none; }
+  .misses { font: var(--size-mono)/1.5 var(--mono); max-width: 64rem; }
+  .misses div + div { margin-top: 0.35rem; }
+  .misses .t { color: var(--muted); }
+  .traces a { font: var(--size-mono) var(--mono); margin-right: 0.35rem; text-decoration: none; padding: 0.05rem 0.3rem; border-radius: 3px; }
+  .traces a.pass { background: var(--tag); color: var(--accent); }
+  .traces a.fail, .traces span.error { background: var(--tag); color: var(--warn); }
+  .traces span.error { font: var(--size-mono) var(--mono); margin-right: 0.35rem; padding: 0.05rem 0.3rem; border-radius: 3px; }
+  .actions { white-space: nowrap; width: 1%; }
+  .actions button + button { margin-left: 0.35rem; }
+  tr.ran td { background: var(--code-bg); }
+  .pass-word { color: var(--accent); font-weight: 600; }
+  .fail-word { color: var(--warn); font-weight: 600; }
+  .legend { margin-top: 1rem; }
+
+  /* The trial choice: each option names its effect, its cost and its time on its own line. */
+  fieldset.choice { border: none; margin: 1.4rem 0 1rem; padding: 0; display: grid; gap: 0.45rem; }
+  fieldset.choice legend { font-weight: 600; font-size: var(--size-body); padding: 0; margin-bottom: 0.5rem; }
+  fieldset.choice label { display: grid; grid-template-columns: 1.6rem 5rem minmax(0, 22rem) auto; align-items: baseline; font-size: var(--size-body); cursor: pointer; }
+  fieldset.choice label b { font-weight: 600; }
+  @media (max-width: 40rem) { fieldset.choice label { grid-template-columns: 1.6rem 1fr; } fieldset.choice label span { grid-column: 2; } }
+
+  .models { display: grid; grid-template-columns: repeat(2, minmax(0, 16rem)); gap: 0.25rem 2rem; margin: 0 0 1.4rem; font-size: var(--size-body); }
+  .models .who { font-weight: 600; }
+  .models .what { margin-top: 0.1rem; }
+
+  .progress { margin-top: 1rem; font-size: var(--size-small); }
+  .bar { height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; margin: 0.45rem 0; max-width: 32rem; }
+  .bar span { display: block; height: 100%; background: var(--accent); width: 0; transition: width 300ms ease; }
+  .ticks { font: var(--size-mono)/1.6 var(--mono); max-width: 48rem; }
+  @media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+
+  .outcome { background: none; border: none; padding: 0; color: var(--accent); font-weight: 600; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+  .where { display: block; margin-top: 0.15rem; }
+  .ids-cell { font: var(--size-mono)/1.5 var(--mono); max-width: 22rem; }
+
+  .doc { margin-top: 1.5rem; padding: 1.4rem 1.6rem; border: 1px solid var(--rule); border-radius: 6px; max-width: 52rem; }
+  .doc .answer { max-width: none; font-size: 1rem; }
+  .doc h3:first-child { margin-top: 0; }
+  .doc .facts { margin-bottom: 1rem; }
+  .doc .label { font-weight: 600; font-size: var(--size-small); margin: 0.9rem 0 0.25rem; }
+  .doc .diag { padding: 0.2rem 0 1rem; border-bottom: 1px solid var(--rule); }
+  .doc .diag:last-of-type { border-bottom: none; }
+  .doc pre.query { margin: 0.3rem 0 0.7rem; }
+  .doc ul.modes { margin: 0.3rem 0 0.6rem; padding-left: 1.1rem; font-size: var(--size-small); }
+
+  details.surface > summary { cursor: pointer; font-size: var(--size-body); }
+  details.surface pre.query { max-height: 28rem; overflow: auto; margin: 0.4rem 0 1rem; }
+  details.surface h3 code { font-size: 0.95rem; }
+  details.surface .facts { margin-top: 1rem; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="column">
+      <div>
+        <h1><a href="/">Infrastructure chat</a> · Eval</h1>
+        <p>An eval run puts the thirty questions to the agent as it ships, scores each against the key, and the gate judges the result.</p>
+        <nav aria-label="On this page">
+          <a href="#eval-run">Read a run and its traces</a>
+          <a href="#run-eval">Run the eval</a>
+          <a href="#improve">Propose an improvement</a>
+          <a href="#agent-surface">What determines a run</a>
+        </nav>
+      </div>
+      <a class="quiet" href="/">Chat</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="column">
+      <section id="eval-run">
+        <h2>Eval run</h2>
+        <div class="row">
+          <label for="picker">Record</label>
+          <select id="picker"></select>
+          <label><input type="checkbox" id="only-failing"> Only questions that failed a trial</label>
+        </div>
+        <p class="line">Records from before three trials side by side are not listed.</p>
+        <div id="run"><p class="line">Loading the eval records…</p></div>
+      </section>
+
+      <section id="run-eval">
+        <h2>Run the eval</h2>
+        <div class="measure">
+          <dl class="facts">
+            <dt>Runs</dt><dd id="eval-runs">The thirty questions through the agent as it ships</dd>
+            <dt>Saves</dt><dd>A record in <code>runs/eval/</code>, as <code>npm run eval</code> does</dd>
+            <dt>Changes</dt><dd>Nothing: not the agent, not the baseline</dd>
+          </dl>
+          <fieldset class="choice">
+            <legend>Trials</legend>
+            <label><input type="radio" name="trials" value="3" checked><b>3 trials</b><span>Judged by the gate against the baseline</span><span class="price" data-trials="3"></span></label>
+            <label><input type="radio" name="trials" value="1"><b>1 trial</b><span>A quick read, reported and not compared</span><span class="price" data-trials="1"></span></label>
+          </fieldset>
+          <button class="act" type="button" id="start-eval">Run the eval</button>
+        </div>
+        <div id="eval-progress"></div>
+      </section>
+
+      <section id="improve">
+        <h2>Propose an improvement</h2>
+        <div class="measure">
+          <div class="models" id="improve-models"></div>
+          <dl class="facts">
+            <dt>Judge</dt><dd>One call per failing question, on its earliest failing trace</dd>
+            <dt>Judge reads</dt><dd>The trace, the question, its expected ids, its entry in <code>eval/key-audit.md</code>, the agent's prompt and tools</dd>
+            <dt>Proposer</dt><dd>One call: reads every judgement and <code>eval/experiments/</code>, proposes one change or none</dd>
+            <dt>Saves</dt><dd>A proposal in <code>runs/improve/</code></dd>
+            <dt>Changes</dt><dd>Nothing: a person applies a proposal, then the eval measures it</dd>
+            <dt>Limit</dt><dd>Reads the thirty scored questions, so a change can fit them; no held-out set yet (<a href="https://github.com/MaximeLas/dave-io-takehome/blob/main/SOLUTION.md">SOLUTION.md</a>)</dd>
+          </dl>
+          <div class="row" id="improve-actions" style="margin-top:1.4rem"></div>
+          <p class="line" id="improve-diagnose"></p>
+        </div>
+        <div id="improve-status"></div>
+
+        <h3>Proposals, newest first</h3>
+        <div id="proposals"></div>
+        <div id="proposal"></div>
+      </section>
+
+      <section id="agent-surface">
+        <h2>What determines a run</h2>
+        <div id="agent"><p class="line">Loading…</p></div>
+      </section>
+    </div>
+  </main>
+
+<script type="module">
+  import { count, dateTime, el, renderMarkdown, seconds } from "./common.js";
+
+  const runRoot = document.getElementById("run");
+  const picker = document.getElementById("picker");
+  const onlyFailing = document.getElementById("only-failing");
+  const cents = (usd, digits = 1) => `${(usd * 100).toFixed(digits)}c`;
+  const fmt = (x) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  const mean = (xs) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length);
+
+  // One JSON call; a refusal or a failure becomes an Error carrying the server's one-line message.
+  async function api(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: options.body ? { "content-type": "application/json" } : {},
+    }).catch(() => {
+      throw new Error("The server could not be reached. Check that it is running.");
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.message || `The server answered ${response.status}.`);
+    return body;
+  }
+
+  function code(text) {
+    return el("code", "", text);
+  }
+  function fact(dl, label, ...value) {
+    const dd = el("dd");
+    dd.append(...value);
+    dl.append(el("dt", "", label), dd);
+  }
+  function traceLink(runId, text, className) {
+    const a = el("a", className, text);
+    a.href = `run.html?id=${encodeURIComponent(runId)}`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    return a;
+  }
+  function button(className, text, title) {
+    const b = el("button", className, text);
+    b.type = "button";
+    if (title) b.title = title;
+    return b;
+  }
+  // An eval record's start time from its id (2026-10-13T09-21-34-260Z-claude-… reads 2026-10-13T09:21:34.260Z).
+  function evalTime(evalId) {
+    const m = evalId.match(/^(\d{4}-\d\d-\d\d)T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z/);
+    return m ? dateTime(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) : evalId;
+  }
+
+  // ---- The eval run: summary, the gate's verdict, the table ----
+
+  let view = null;
+  let agentView = null;
+
+  // A resource by its name, the last segment of its id (aws:ec2:i-ecomm-prod-02 reads i-ecomm-prod-02).
+  const short = (ids) => ids.map((id) => id.slice(id.lastIndexOf(":") + 1)).join(", ");
+
+  // What went wrong in one trial that did not pass, in one line.
+  function trialProblem(r) {
+    if (!r.score || !r.diagnostics) return `threw: ${r.error}`;
+    if (r.score.empty) return `empty answer (stop: ${r.diagnostics.stopReason})`;
+    return [r.score.missing.length ? `missing ${short(r.score.missing)}` : "", r.score.extra.length ? `added ${short(r.score.extra)}` : ""].filter(Boolean).join("; ");
+  }
+  // The same, with the full ids, for the hover.
+  function trialProblemFull(r) {
+    if (!r.score || r.score.empty) return trialProblem(r);
+    return [r.score.missing.length ? `missing ${r.score.missing.join(", ")}` : "", r.score.extra.length ? `added ${r.score.extra.join(", ")}` : ""].filter(Boolean).join("; ");
+  }
+
+  // A metric's mean over the trials that carry it, or null when none does (a record older than the metric).
+  const perRun = (q, pick) => mean(q.results.map(pick).filter((x) => x !== undefined && x !== null));
+  const pct = (x) => `${Math.round(100 * x)}%`;
+  // What the agent under test is, as this server ships it.
+  const agentName = () => (agentView ? `${agentView.settings.model} at effort ${agentView.settings.effort}` : "the agent as this server ships it");
+
+  // The table's columns, one entry each: a new metric in the record joins as one more entry. A
+  // column with `has` shows only when the record holds its metric, so an older record is not a
+  // column of dashes.
+  const COLUMNS = [
+    {
+      head: "Question",
+      cell(q) {
+        const td = el("td", "qtext");
+        // The id follows the question on its line, so a row is one line wherever the question fits.
+        td.append(view.questionText[q.id] ?? q.id, " ", el("span", "qid", q.id));
+        return td;
+      },
+    },
+    {
+      head: "Passed",
+      cell(q) {
+        const td = el("td", "num", `${q.passes}/${q.results.length}`);
+        if (q.id in view.amendments) {
+          const amended = el("span", "amended", `[${q.amendedPasses}/${q.results.length}]`);
+          amended.title = `Amended key: passes against eval/key-overlay.json, not gated. ${view.amendments[q.id]}`;
+          td.append(amended);
+        }
+        return td;
+      },
+    },
+    {
+      head: "Baseline",
+      cell(q) {
+        const c = view.column;
+        const b = c?.questions[q.id];
+        const td = el("td", "num", b ? `${b.passes}/${c.trials}` : "–");
+        if (b?.solid) td.append(el("span", "solid", "solid"));
+        return td;
+      },
+    },
+    {
+      head: "Cost",
+      cell(q) {
+        const costs = q.results.filter((r) => r.diagnostics).map((r) => r.diagnostics.costUsd);
+        return el("td", "num", costs.length ? cents(mean(costs)) : "–");
+      },
+    },
+    {
+      head: "Tool calls",
+      cell(q) {
+        // The description searches are tool calls too: named beside the count when there are any.
+        const calls = q.results.filter((r) => r.diagnostics).map((r) => r.diagnostics.toolCalls);
+        const searches = perRun(q, (r) => r.diagnostics?.searchCalls);
+        const td = el("td", "num", calls.length ? fmt(mean(calls)) : "–");
+        if (searches) td.append(`, ${fmt(searches)} ${searches === 1 ? "search" : "searches"}`);
+        td.title = `Tool calls: ${calls.length ? fmt(mean(calls)) : "none"} per trial` + (searches === null ? "." : `, ${fmt(searches)} of them description searches.`);
+        return td;
+      },
+    },
+    {
+      // The answer's two checks a newer record carries, in one narrow cell: the prose's share, and
+      // ungrounded ids only when there are any.
+      head: "Answer checks",
+      has: (r) => r.trialTotals.some((t) => t.meanProseNamed !== undefined || t.ungroundedIds !== undefined),
+      cell(q) {
+        const td = el("td", "num");
+        const prose = perRun(q, (r) => r.checks?.proseNamed);
+        const ids = [...new Set(q.results.flatMap((r) => r.checks?.ungrounded ?? []))];
+        td.append(prose === null ? "–" : `${pct(prose)} named`);
+        if (ids.length) td.append(", ", el("span", "warn", `${ids.length} ungrounded`));
+        td.title = [
+          prose === null ? "" : `Named: the prose names ${pct(prose)} of the asserted ids (eval/score.ts, checkAnswer).`,
+          ids.length ? `Ungrounded: asserted ids found in no tool output of their run: ${ids.join(", ")}.` : "Ungrounded: none.",
+        ].filter(Boolean).join(" ");
+        return td;
+      },
+    },
+    {
+      head: "Traces",
+      cell(q) {
+        const td = el("td", "traces");
+        q.results.forEach((r, t) => {
+          if (r.runId) td.append(traceLink(r.runId, String(t + 1), r.status));
+          else {
+            const s = el("span", "error", String(t + 1));
+            s.title = r.error ?? "";
+            td.append(s);
+          }
+        });
+        return td;
+      },
+    },
+  ];
+
+  // The ids each failing trial missed and added, on a full-width line under its question, so a
+  // passing row stays as tall as its question and a failing one reads its ids across the page.
+  // Trials that failed the same way share one line.
+  function missesRow(q, span, diagnose) {
+    const groups = new Map();
+    q.results.forEach((r, t) => {
+      if (r.status === "pass") return;
+      const problem = trialProblem(r);
+      if (!groups.has(problem)) groups.set(problem, { trials: [], full: trialProblemFull(r) });
+      groups.get(problem).trials.push(t + 1);
+    });
+    if (groups.size === 0) return null;
+    const tr = el("tr", "detail failing");
+    const td = el("td");
+    td.colSpan = span;
+    const wrap = el("div", "detail-line");
+    const lines = el("div", "misses");
+    for (const [problem, { trials, full }] of groups) {
+      const line = el("div");
+      line.title = full;
+      line.append(el("span", "t", `${trials.length > 1 ? "trials" : "trial"} ${trials.join(", ")}: `), problem);
+      lines.append(line);
+    }
+    wrap.append(lines);
+    if (diagnose) wrap.append(diagnose);
+    td.append(wrap);
+    tr.append(td);
+    return tr;
+  }
+
+  function gateBlock(v) {
+    const g = v.verdict;
+    const c = g.comparison;
+    const line = g.line;
+    const box = el("div", `gate ${/^(OK|ACCEPTING: .*OK)/.test(line) ? "ok" : /REGRESSION|INCOMPLETE|Not judged/.test(line) ? "bad" : ""}`);
+    box.append(el("p", "verdict", line));
+    // The rules, then which baseline the verdict and the Baseline column read: one list of labelled lines.
+    const dl = el("dl", "facts");
+    if (c) {
+      // The rules as the comparison holds them: the numbers of the baseline it was judged against.
+      const rule = (n, held, text) => {
+        const dd = el("dd");
+        dd.append(el("span", held ? "held" : "failed", held ? "Held: " : "FAILED: "), text);
+        dl.append(el("dt", held ? "held" : "failed", `Rule ${n}`), dd);
+      };
+      const broken = c.solid.broken.map((id) => `${id} (${c.flips.find((f) => f.id === id)?.run ?? 0} of ${c.trials})`);
+      rule(1, c.average.held, `mean ${fmt(c.average.value)} passes, floor ${fmt(c.average.limit)} (baseline ${fmt(c.average.baseline)} minus tolerance ${c.average.allowance})`);
+      rule(2, c.solid.held, `the ${c.solid.solidCount} solid questions each pass at least ${c.trials - 1} of ${c.trials}` + (broken.length ? `; broken: ${broken.join(", ")}` : ""));
+      rule(3, c.cost.held, `mean ${cents(c.cost.value, 2)} per trial, ceiling ${cents(c.cost.limit, 2)} (baseline ${cents(c.cost.baseline, 2)} plus margin ${cents(c.cost.allowance, 2)})`);
+      dl.append(el("dt", "gap"), el("dd", "gap"));
+    }
+    const b = v.baseline;
+    if (g.judged === "stored") {
+      if (g.earlierBaseline) fact(dl, "Judged against", "An earlier ", code(c.baselineFile), ", when the run was judged; the verdict is the one stored then");
+      else fact(dl, "Judged against", "Today's baseline, when the run was judged; the verdict is the one stored then");
+      if (g.earlierBaseline) fact(dl, "Baseline column", "That earlier version's, recovered from the comparison; its solid set is not stored");
+    } else if (c) {
+      fact(dl, "Judged against", "Today's baseline, now: the record stores no verdict");
+    } else if (b) {
+      fact(dl, "Judged against", "Nothing: not compared");
+      fact(dl, "Baseline column", "Today's baseline");
+    }
+    if (b) {
+      fact(dl, "Today's baseline", code(b.file), `, accepted ${dateTime(b.acceptedAt)} on `, code(b.codeVersion));
+      fact(dl, "Its trials", `passed ${b.passed.join(", ")}; ${b.costUsd.map((x) => cents(x, 2)).join(", ")} per trial`);
+    } else if (g.judged === "stored") {
+      fact(dl, "Today's baseline", "Unreadable");
+    }
+    if (g.baselineRun) fact(dl, "This run", el("span", "warn", "Today's baseline was accepted from it, so every rule holds by construction"));
+    fact(dl, "Baseline moves by", code("npm run eval -- --accept"), ", on a committed tree, in its own commit; never from this page");
+    box.append(dl);
+    if (v.metrics.length) {
+      const details = el("details");
+      details.append(el("summary", "", "Every stored metric against today's baseline"), el("pre", "", v.metrics.join("\n")));
+      box.append(details);
+    }
+    return box;
+  }
+
+  function renderRun() {
+    const v = view;
+    const r = v.record;
+    const s = r.summary;
+    const page = [];
+    const dl = el("dl", "facts");
+    dl.style.marginTop = "1.5rem";
+    fact(dl, "Started", `${dateTime(r.startedAt)}, ${seconds(r.durationMs)}`);
+    fact(dl, "Agent", `${r.model}, effort ${r.effort}`);
+    const versions = el("span");
+    versions.append("agent ", r.agentVersion ? code(r.agentVersion) : "not stored (older record)", ", prompt ", code(r.promptVersion), ", code ", code(r.codeVersion));
+    if (agentView && r.agentVersion && r.agentVersion !== agentView.agentVersion) {
+      versions.append(el("span", "warn", ` (this server's agent is ${agentView.agentVersion})`));
+    }
+    fact(dl, "Versions", versions);
+    const per = (pick) => r.trialTotals.map(pick).join(", ");
+    fact(dl, "Passed", `${per((t) => t.passed)} of ${r.questions.length}` + (s.trials > 1 ? ` (mean ${fmt(s.meanPassed)})` : ""));
+    if (Object.keys(v.amendments).length) fact(dl, "Amended key", `${per((t) => t.passedAmended)} of ${r.questions.length}, not gated`);
+    fact(dl, "Cost", `${per((t) => cents(t.costUsd))} per trial` + (s.trials > 1 ? ` (${cents(s.costUsd)} in all)` : ""));
+    if (s.errors) fact(dl, "Errors", el("span", "warn", `${count(s.errors, "question run")} threw`));
+    page.push(dl, gateBlock(v));
+
+    const questions = r.questions.filter((q) => !onlyFailing.checked || q.passes < q.results.length);
+    const columns = COLUMNS.filter((col) => !col.has || col.has(r));
+    const table = el("table", "grid");
+    const head = el("tr");
+    for (const col of columns) {
+      const th = el("th", "", col.head);
+      if (col.head === "Baseline" && v.column) th.title = v.column.source === "today" ? "Baseline: today's committed baseline" : "Baseline: the one this run was judged against";
+      head.append(th);
+    }
+    head.append(el("th", "", ""));
+    table.append(el("thead"));
+    table.tHead.append(head);
+    const body = el("tbody");
+    const diagnoseCost = cents(improveCost(1), 0);
+    for (const q of questions) {
+      const tr = el("tr", q.passes < q.results.length ? "failing" : "");
+      for (const col of columns) tr.append(col.cell(q));
+      const actions = el("td", "actions");
+      const costs = q.results.filter((x) => x.diagnostics).map((x) => x.diagnostics.costUsd);
+      const once = costs.length ? cents(mean(costs)) : "0.3c";
+      const again = button("quiet small", `Run once, ${once}`, `Run once: this question through ${agentName()}, scored against the key. About ${once}, its mean in this run. Saves the run in runs/, outside any eval record.`);
+      again.addEventListener("click", () => runOnce(q.id, tr, again, columns.length + 1));
+      actions.append(again);
+      tr.append(actions);
+      body.append(tr);
+      // Diagnose sits on the failure's own line: it reads that failure.
+      let diagnose = null;
+      if (q.results.some((x) => x.status === "fail")) {
+        diagnose = button("quiet small", `Diagnose, ${diagnoseCost}`, `Diagnose: one judge call on this question's earliest failing trace, then one proposer call, by ${v.improver.model} at effort ${v.improver.effort}. About ${diagnoseCost}. Saves a proposal in runs/improve/; changes nothing.`);
+        diagnose.addEventListener("click", () => propose([q.id]));
+      }
+      const detail = missesRow(q, columns.length + 1, diagnose);
+      if (detail) {
+        tr.classList.add("has-detail");
+        body.append(detail);
+      }
+    }
+    table.append(body);
+    const wrap = el("div", "table-wrap");
+    wrap.append(table);
+    page.push(wrap);
+
+    // What the row buttons do, once, under the table rather than in every row's tooltip only.
+    const legend = el("dl", "facts legend");
+    fact(legend, "Run once", `The question through ${agentName()}, scored against the key; saved in `, code("runs/"), ", outside any eval record");
+    fact(legend, "Under a failing row", "The ids each failing trial missed and added, and Diagnose: the improver on that question alone (below)");
+    if (Object.keys(v.amendments).length) fact(legend, `[n/${s.trials}]`, "Passes against the amended key, ", code("eval/key-overlay.json"), "; not gated");
+    if (r.trialTotals.some((t) => t.searchCalls !== undefined)) fact(legend, "Tool calls", "Per trial, with the description searches among them named when there are any");
+    if (columns.some((col) => col.head === "Answer checks")) fact(legend, "Answer checks", "The share of the asserted ids the prose names; ids found in no tool output, only when there are any");
+    page.push(legend);
+    runRoot.replaceChildren(...page);
+    renderEvalControls();
+    renderImproveActions();
+  }
+
+  async function showRecord(evalId) {
+    runRoot.replaceChildren(el("p", "line", "Loading the record…"));
+    view = await api(`/api/evals/${encodeURIComponent(evalId)}`);
+    renderRun();
+  }
+
+  // The improver's estimate for n judged traces, the formula the command prints.
+  const improveCost = (n) => (view ? n * view.improveEstimateUsd.perTrace + view.improveEstimateUsd.proposal : 0);
+
+  async function loadRecords(select) {
+    const records = await api("/api/evals");
+    picker.replaceChildren(...records.map((r) => {
+      const option = el("option", "", `${dateTime(r.startedAt)}, ${count(r.trials, "trial")}${r.full ? "" : `, ${r.questions} questions`}${r.errors ? `, ${count(r.errors, "error")}` : ""}: mean ${fmt(r.meanPassed)} of ${r.questions}, ${cents(r.meanCostUsd)} a trial`);
+      option.value = r.evalId;
+      return option;
+    }));
+    if (records.length === 0) {
+      runRoot.replaceChildren(el("p", "notice", "No eval record in runs/eval/ yet: run records are not committed, so a fresh clone starts here. Run the eval below, or npm run eval."));
+      return;
+    }
+    // A record named in the address, else the latest complete one: a run the API refused is saved too, and would otherwise open first.
+    const clean = records.find((r) => r.full && r.errors === 0) ?? records[0];
+    picker.value = records.some((r) => r.evalId === select) ? select : clean.evalId;
+    await showRecord(picker.value);
+  }
+
+  // ---- One question, now ----
+
+  async function runOnce(questionId, row, control, span) {
+    control.disabled = true;
+    const started = Date.now();
+    const out = el("tr", "ran");
+    const cell = el("td");
+    cell.colSpan = span;
+    out.append(cell);
+    // Under the row's missed-and-added line when it has one, replacing any earlier result.
+    const anchor = row.nextElementSibling?.classList.contains("detail") ? row.nextElementSibling : row;
+    anchor.nextElementSibling?.classList.contains("ran") && anchor.nextElementSibling.remove();
+    anchor.after(out);
+    const timer = setInterval(() => (cell.textContent = `Running ${questionId} once, ${Math.round((Date.now() - started) / 1000)} s…`), 1000);
+    cell.textContent = `Running ${questionId} once…`;
+    try {
+      const { result } = await api("/api/question-runs", { method: "POST", body: JSON.stringify({ questionId }) });
+      cell.replaceChildren();
+      if (result.status === "error") {
+        cell.append(el("span", "fail-word", "Not scored: "), result.error);
+      } else {
+        cell.append(el("span", result.status === "pass" ? "pass-word" : "fail-word", result.status === "pass" ? "Pass" : "Fail"), " against the key");
+        if (result.status === "fail") cell.append(`: ${trialProblem(result)}`);
+        cell.append(`; ${cents(result.diagnostics.costUsd)}, ${count(result.diagnostics.toolCalls, "tool call")}, `, traceLink(result.runId, "trace"), "; saved in runs/, outside any eval record");
+      }
+    } catch (error) {
+      cell.replaceChildren(el("span", "fail-word", "Not run: "), error.message);
+    } finally {
+      clearInterval(timer);
+      control.disabled = false;
+    }
+  }
+
+  // ---- The whole eval ----
+
+  const startButton = document.getElementById("start-eval");
+  const progress = document.getElementById("eval-progress");
+  const chosenTrials = () => Number(document.querySelector('input[name="trials"]:checked').value);
+  // A trial's cost: the mean of the committed baseline's trials, else the shipped agent's usual figure.
+  const perTrial = () => (view?.baseline ? mean(view.baseline.costUsd) : 0.09);
+
+  // The cost on each trial option and on the button, from the baseline the record view carries.
+  function renderEvalControls() {
+    document.getElementById("eval-runs").replaceChildren(`The thirty questions through ${agentName()}, as this server ships it`);
+    for (const span of document.querySelectorAll(".price[data-trials]")) {
+      span.textContent = `about ${cents(Number(span.dataset.trials) * perTrial(), 0)}, about 2 min`;
+    }
+    const n = chosenTrials();
+    startButton.textContent = `Run ${count(n, "trial")}, about ${cents(n * perTrial(), 0)}`;
+  }
+
+  async function startEval() {
+    const trials = chosenTrials();
+    if (!confirm(`Run the thirty questions ${trials === 1 ? "once" : `${trials} times`} through ${agentName()}? About ${cents(trials * perTrial(), 0)} of API spend.`)) return;
+    startButton.disabled = true;
+    progress.replaceChildren(el("p", "progress", "Starting…"));
+    try {
+      const job = await api("/api/eval-runs", { method: "POST", body: JSON.stringify({ trials }) });
+      await follow(job);
+    } catch (error) {
+      progress.replaceChildren(el("p", "progress notice", error.message));
+    } finally {
+      startButton.disabled = false;
+    }
+  }
+
+  function showJob(job) {
+    const box = el("div", "progress");
+    const errors = job.done.filter((d) => d.status === "error");
+    box.append(el("div", "", `${job.done.length} of ${job.total} question runs done: ${count(job.done.filter((d) => d.status === "pass").length, "pass", "passes")}, ${count(errors.length, "error")}; ${seconds(Date.now() - new Date(job.startedAt).getTime())}`));
+    const bar = el("div", "bar");
+    const fill = el("span");
+    fill.style.width = `${(100 * job.done.length) / job.total}%`;
+    bar.append(fill);
+    box.append(bar);
+    // The first error's reason, once: when the API refuses, every run fails the same way.
+    if (errors.length) box.append(el("p", "notice", `${errors[0].id}, trial ${errors[0].trial}: ${errors[0].error}`));
+    box.append(el("div", "ticks", job.done.slice(-12).map((d) => `${d.id}${job.trials > 1 ? ` t${d.trial}` : ""} ${d.status}`).join("  ")));
+    if (job.state === "done") box.append(el("p", job.verdict.startsWith("OK") ? "pass-word" : "notice", `Saved ${job.evalId}. ${job.verdict}`));
+    if (job.state === "failed") box.append(el("p", "notice", job.error));
+    progress.replaceChildren(box);
+  }
+
+  async function follow(job) {
+    while (job.state === "running") {
+      showJob(job);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      job = await api(`/api/eval-runs/${job.jobId}`);
+    }
+    showJob(job);
+    if (job.evalId) await loadRecords(job.evalId);
+  }
+
+  // ---- The improver ----
+
+  const improveStatus = document.getElementById("improve-status");
+  let improving = false;
+  const failingQuestions = () => view.record.questions.filter((q) => q.results.some((r) => r.status === "fail"));
+
+  function renderImproveActions() {
+    const root = document.getElementById("improve-actions");
+    const diagnoseLine = document.getElementById("improve-diagnose");
+    const { model, effort } = view.improver;
+    // The two models, as a labelled pair: the one scored and the one that reads its traces.
+    const models = document.getElementById("improve-models");
+    const pair = (who, name, settings, what) => {
+      const div = el("div");
+      const line = el("div");
+      line.append(name ? code(name) : "", settings);
+      div.append(el("div", "who", who), line, el("div", "what", what));
+      return div;
+    };
+    models.replaceChildren(
+      pair("Agent under test", agentView?.settings.model, agentView ? `, effort ${agentView.settings.effort}` : "Settings not readable", "As this server ships it"),
+      pair("Improver", model, `, effort ${effort}`, "Reads the traces, never answers"),
+    );
+    const failing = failingQuestions();
+    if (failing.length === 0) {
+      const threw = view.record.summary.errors;
+      root.replaceChildren(el("p", "line", threw
+        ? `Nothing to diagnose: no question failed a trial, and ${count(threw, "run")} threw, which leave no trace.`
+        : "Nothing to diagnose: every question passed every trial."));
+      diagnoseLine.replaceChildren();
+      return;
+    }
+    const e = view.improveEstimateUsd;
+    const total = cents(improveCost(failing.length), 0);
+    const go = button("act", `Propose from ${count(failing.length, "failing question")}, about ${total}`, `Propose: ${count(failing.length, "judge call")} and one proposer call, by ${model} at effort ${effort}. About ${total}. Saves a proposal in runs/improve/; changes nothing.`);
+    go.disabled = improving;
+    go.addEventListener("click", () => propose(null));
+    root.replaceChildren(go, el("span", "line price", `${cents(e.perTrace, 0)} a question, ${cents(e.proposal, 0)} the proposal`));
+    root.lastChild.style.margin = "0";
+    diagnoseLine.replaceChildren(el("b", "", "Diagnose"), ` on a failing row: the same, on that question alone, about ${cents(improveCost(1), 0)}.`);
+  }
+
+  async function propose(questionIds) {
+    if (improving) return;
+    const n = questionIds ? questionIds.length : failingQuestions().length;
+    if (!confirm(`Hand ${count(n, "failing question")} to the improver (${view.improver.model} at effort ${view.improver.effort})? About ${cents(improveCost(n), 0)} of API spend.`)) return;
+    improving = true;
+    renderImproveActions();
+    const started = Date.now();
+    const what = questionIds ? questionIds.join(", ") : "the failing questions";
+    const timer = setInterval(() => (improveStatus.replaceChildren(el("p", "progress", `The improver is reading ${what}, ${Math.round((Date.now() - started) / 1000)} s (a minute or two)…`))), 1000);
+    improveStatus.replaceChildren(el("p", "progress", `The improver is reading ${what}…`));
+    improveStatus.scrollIntoView({ behavior: "smooth", block: "center" });
+    try {
+      const record = await api("/api/improve", { method: "POST", body: JSON.stringify({ evalId: view.record.evalId, ...(questionIds ? { questionIds } : {}) }) });
+      clearInterval(timer);
+      improveStatus.replaceChildren(el("p", "progress", `Proposal saved in runs/improve/, ${cents(record.costUsd)}.`));
+      await loadProposals();
+      renderProposal(record);
+    } catch (error) {
+      clearInterval(timer);
+      improveStatus.replaceChildren(el("p", "progress notice", `No proposal: ${error.message}`));
+    } finally {
+      improving = false;
+      renderImproveActions();
+    }
+  }
+
+  // What a proposal concluded, as a label: the proposer's target (src/improve/improve.ts, PROPOSAL_SCHEMA).
+  const OUTCOME = {
+    system_prompt: "Change the system prompt",
+    convention: "Change a reading convention",
+    tool_description: "Change a tool's description",
+    model: "Change the model",
+    effort: "Change the effort",
+    no_change_key_or_question_at_fault: "No change: the key or the question is at fault",
+    no_change_noise: "No change: what is left is noise",
+    no_change_too_few_traces: "No change: too few traces to show a pattern",
+  };
+  const outcome = (target) => OUTCOME[target] ?? target.replace(/_/g, " ");
+
+  // The proposals as a table: the outcome first, then when, which questions, the cost and the record read.
+  async function loadProposals() {
+    const root = document.getElementById("proposals");
+    const proposals = await api("/api/improve");
+    if (proposals.length === 0) {
+      root.replaceChildren(el("p", "line", "No proposal in runs/improve/ yet."));
+      return;
+    }
+    const table = el("table", "grid");
+    const head = el("tr");
+    for (const h of ["Outcome", "Ran", "Questions judged", "Cost", "Eval record read"]) head.append(el("th", "", h));
+    table.append(el("thead"));
+    table.tHead.append(head);
+    const body = el("tbody");
+    for (const p of proposals) {
+      const tr = el("tr");
+      const what = el("td");
+      const open = button("outcome", outcome(p.target), "Open this proposal below");
+      open.addEventListener("click", async () => renderProposal(await api(`/api/improve/${encodeURIComponent(p.improveId)}`)));
+      what.append(open);
+      if (!p.target.startsWith("no_change") && p.location) what.append(el("span", "where", p.location));
+      const record = el("a", "", evalTime(p.evalId));
+      record.href = `eval.html?eval=${encodeURIComponent(p.evalId)}`;
+      record.title = `Opens eval record ${p.evalId}`;
+      const recordCell = el("td", "num");
+      recordCell.append(record);
+      tr.append(what, el("td", "num", dateTime(p.createdAt)), el("td", "ids-cell", p.questions.join(", ")), el("td", "num", cents(p.costUsd)), recordCell);
+      body.append(tr);
+    }
+    table.append(body);
+    const wrap = el("div", "table-wrap");
+    wrap.style.marginTop = "0";
+    wrap.append(table);
+    root.replaceChildren(wrap);
+  }
+
+  function prose(text) {
+    const div = el("div", "answer");
+    div.innerHTML = renderMarkdown(text);
+    return div;
+  }
+  function labelled(label, text) {
+    const div = el("div");
+    div.append(el("p", "label", label), prose(text));
+    return div;
+  }
+
+  // The proposal as a document: what it read, each trace's judgement, then the one change.
+  function renderProposal(r) {
+    const doc = el("article", "doc");
+    doc.append(el("h3", "", `Proposal of ${dateTime(r.createdAt)}`));
+    const meta = el("dl", "facts");
+    fact(meta, "Eval record", `${evalTime(r.eval.evalId)}; agent `, code(r.eval.agentVersion ?? "not stored"), `; passed ${r.eval.passed.join(", ")} of ${r.eval.questions}`);
+    fact(meta, "Improver", code(r.improver.model), `, effort ${r.improver.effort}, prompt `, code(r.improver.promptVersion));
+    fact(meta, "Cost", cents(r.costUsd));
+    fact(meta, "Status", "Not applied, not measured. The judge is not checked against a person's labels: read each diagnosis against its trace.");
+    doc.append(meta);
+
+    doc.append(el("h3", "", "Diagnoses"));
+    for (const j of r.judged) {
+      const g = j.judgement;
+      const d = el("section", "diag");
+      d.append(el("p", "question", j.question));
+      const facts = el("dl", "facts");
+      fact(facts, "Question", code(j.questionId), `, passed ${j.passes} of ${j.trials}`);
+      fact(facts, "Trace read", `trial ${j.trial}, `, traceLink(j.runId, "open"));
+      fact(facts, "Audit verdict", j.auditVerdict);
+      fact(facts, "Missing", j.missing.length ? code(j.missing.join(", ")) : "none");
+      fact(facts, "Added", j.extra.length ? code(j.extra.join(", ")) : "none");
+      d.append(facts);
+      d.append(labelled(`First error, step ${g.firstError.step}`, g.firstError.what));
+      d.append(labelled(`Instruction (${g.instruction.source.replace(/_/g, " ")}, ${g.instruction.status.replace(/_/g, " ")})`, g.instruction.quote ? `"${g.instruction.quote}"` : "None quoted."));
+      const present = Object.entries(g.failureModes).filter(([, m]) => m.verdict);
+      const modes = el("ul", "modes");
+      for (const [mode, m] of present) {
+        const li = el("li");
+        li.append(el("b", "", mode.replace(/_/g, " ")), `: ${m.evidence}`);
+        modes.append(li);
+      }
+      d.append(el("p", "label", "Failure modes present"), present.length ? modes : el("p", "line", "None of the seven."));
+      d.append(labelled("Diagnosis", g.diagnosis));
+      doc.append(d);
+    }
+
+    const p = r.proposal;
+    // The no-change outcomes name why nothing should change; they carry no location or text.
+    const noChange = p.change.target.startsWith("no_change");
+    doc.append(el("h3", "", noChange ? "No change proposed" : "The proposed change"));
+    const change = el("dl", "facts");
+    fact(change, "Outcome", outcome(p.change.target));
+    if (!noChange) fact(change, "Where", p.change.location);
+    doc.append(change, labelled("Pattern", p.pattern), labelled("Left out", p.outOfScope));
+    if (!noChange) doc.append(el("p", "label", "Before"), el("pre", "query", p.change.before || "(a new line)"), el("p", "label", "After"), el("pre", "query", p.change.after));
+    doc.append(labelled("Hypothesis", p.hypothesis));
+    if (p.check) doc.append(labelled("The check, written before any run", p.check));
+    doc.append(labelled("What the eval should show", p.measure), labelled("What might regress", p.mightRegress), labelled("Already tried", p.alreadyTried), labelled("Not changed", p.notChanged));
+    document.getElementById("proposal").replaceChildren(doc);
+    doc.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---- What determines a run ----
+
+  function renderAgent(a) {
+    const details = el("details", "surface");
+    const summary = el("summary");
+    summary.append("Agent version ", code(a.agentVersion), ": show what it hashes");
+    details.append(summary);
+    const dl = el("dl", "facts");
+    fact(dl, "Hashes", `The system prompt, the ${count(a.tools.length, "tool")}' text and schemas, the model and its settings`);
+    fact(dl, "Model", code(a.settings.model));
+    fact(dl, "Effort", a.settings.effort);
+    fact(dl, "Max tokens", `${a.settings.maxTokens.toLocaleString("en")} per model call`);
+    fact(dl, "Editing", "Read only; editing from this page is not built");
+    details.append(dl, el("h3", "", "System prompt, with the conventions and the ids rule"), el("pre", "query", a.systemPrompt));
+    for (const t of a.tools) {
+      const h = el("h3");
+      h.append("Tool ", code(t.name));
+      const schema = el("details");
+      schema.append(el("summary", "", "Input schema"), el("pre", "query", JSON.stringify(t.schema, null, 2)));
+      details.append(h, el("pre", "query", t.description), schema);
+    }
+    document.getElementById("agent").replaceChildren(details);
+  }
+
+  // eval.html?eval=<evalId> opens that record; ?failing, on the questions that failed a trial.
+  const params = new URLSearchParams(location.search);
+  onlyFailing.checked = params.has("failing");
+  picker.addEventListener("change", () => showRecord(picker.value).catch((e) => runRoot.replaceChildren(el("p", "notice", e.message))));
+  onlyFailing.addEventListener("change", () => view && renderRun());
+  startButton.addEventListener("click", startEval);
+  for (const radio of document.querySelectorAll('input[name="trials"]')) radio.addEventListener("change", renderEvalControls);
+
+  agentView = await api("/api/agent").catch(() => null);
+  if (agentView) renderAgent(agentView);
+  else document.getElementById("agent").replaceChildren(el("p", "notice", "The agent's settings could not be read."));
+  renderEvalControls();
+  await loadRecords(params.get("eval")).catch((e) => runRoot.replaceChildren(el("p", "notice", e.message)));
+  await loadProposals().catch((e) => document.getElementById("proposals").replaceChildren(el("p", "notice", e.message)));
+  // An eval started before a reload keeps running on the server; follow it again.
+  const { job } = await api("/api/eval-runs").catch(() => ({ job: null }));
+  if (job) {
+    startButton.disabled = true;
+    follow(job).catch((e) => progress.replaceChildren(el("p", "progress notice", e.message))).finally(() => (startButton.disabled = false));
+  }
+</script>
+</body>
+</html>

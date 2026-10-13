@@ -1,6 +1,7 @@
 // Reads the thirty questions from eval/QUESTIONS.md, the assignment's own list, so the
 // ids used everywhere (run records, scores, expected.generated.json) are its ids.
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 /** One eval question: the id from QUESTIONS.md and the question as asked. */
 export interface Question {
@@ -8,7 +9,9 @@ export interface Question {
   text: string;
 }
 
-const QUESTIONS_FILE = new URL("./QUESTIONS.md", import.meta.url);
+// Relative to the working directory, the repo root, as the baselines and runs/ are, so the
+// compiled server under dist/ reads the same file as the commands run with tsx.
+const QUESTIONS_FILE = path.join("eval", "QUESTIONS.md");
 // Each question is a bullet: - `question-id` — The question text?
 const QUESTION_LINE = /^- `([a-z0-9-]+)` — (.+)$/;
 
