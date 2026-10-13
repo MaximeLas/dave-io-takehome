@@ -1,5 +1,5 @@
 // The command-line convention the developer commands share (`npm run check`, `index`, `ask`,
-// `eval`, `simulate-gate`): `--help` prints what the command does, its options with their defaults and an
+// `eval`, `simulate-gate`, `improve`): `--help` prints what the command does, its options with their defaults and an
 // example, and exits 0; a usage error is one line naming the fix, printed before any token is
 // spent or any data is written; a failure is one line, never a stack trace. Kept in one place
 // so the commands cannot drift apart. `--help` is answered before settings are read, so it
